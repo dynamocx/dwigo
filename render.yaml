@@ -72,8 +72,8 @@ databases:
     databaseName: dwigo
     user: dwigo_user
 
+redis:
   - name: dwigo-redis
-    type: redis
     plan: free
     maxmemoryPolicy: allkeys-lru
 
