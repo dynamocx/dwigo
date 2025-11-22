@@ -52,15 +52,9 @@ services:
       - key: REDIS_URL
         value: ""  # Create Redis manually in Render dashboard and set this
       - key: JWT_SECRET
-        fromService:
-          name: dwigo-app
-          type: web
-          key: JWT_SECRET
+        generateValue: true
       - key: ADMIN_API_TOKEN
-        fromService:
-          name: dwigo-app
-          type: web
-          key: ADMIN_API_TOKEN
+        generateValue: true
       - key: MIN_DEAL_QUALITY_SCORE
         value: 0.4
       - key: AUTO_REJECT_QUALITY_SCORE
