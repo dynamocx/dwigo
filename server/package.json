@@ -1,0 +1,38 @@
+{
+  "name": "dwigo-server",
+  "version": "1.0.0",
+  "description": "DWIGO Backend API",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js",
+    "worker": "node jobs/worker.js",
+    "ingest:seed": "node scripts/seedIngestionJob.js",
+    "ingest:promote": "node scripts/promoteIngestedDeals.js",
+    "ingest:crawl:lansing": "node scripts/crawlLansingBrewery.js",
+    "migrate:deals-status": "node scripts/migrateDealsStatus.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.11.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "axios": "^1.6.2",
+    "node-cron": "^3.0.3",
+    "socket.io": "^4.7.4",
+    "express-rate-limit": "^7.1.5",
+    "joi": "^17.11.0",
+    "bullmq": "^4.15.0",
+    "ioredis": "^5.4.1",
+    "cheerio": "^1.0.0-rc.12"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0"
+  }
+}

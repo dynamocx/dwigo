@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DWIGO Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #1976d2;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="header">🚀 DWIGO - Deals Where I Go</h1>
+        <p style="text-align: center; color: #666;">Testing the DWIGO API Backend</p>
+        
+        <div class="test-section">
+            <h3>Backend Health Check</h3>
+            <button onclick="testHealth()">Test API Health</button>
+            <div id="health-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>User Registration</h3>
+            <button onclick="testRegister()">Test Registration</button>
+            <div id="register-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>User Login</h3>
+            <button onclick="testLogin()">Test Login</button>
+            <div id="login-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Get Deals</h3>
+            <button onclick="testDeals()">Test Deals API</button>
+            <div id="deals-result" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>User Profile (Authenticated)</h3>
+            <button onclick="testUserProfile()">Test User Profile</button>
+            <div id="profile-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api';
+        
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                resultDiv.innerHTML = `<span class="success">✅ API is healthy!</span><br>Status: ${data.status}<br>Timestamp: ${data.timestamp}`;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ API Error:</span> ${error.message}`;
+            }
+        }
+
+        async function testRegister() {
+            const resultDiv = document.getElementById('register-result');
+            try {
+                // Generate unique email to avoid "already exists" error
+                const uniqueEmail = `test${Date.now()}@dwigo.com`;
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: uniqueEmail,
+                        password: 'testpassword123',
+                        firstName: 'Test',
+                        lastName: 'User',
+                        phone: '555-0123'
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Registration successful!</span><br>User: ${data.user.firstName} ${data.user.lastName}`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Registration failed:</span> ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Registration Error:</span> ${error.message}`;
+            }
+        }
+
+        async function testLogin() {
+            const resultDiv = document.getElementById('login-result');
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'test@dwigo.com',
+                        password: 'testpassword123'
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Login successful!</span><br>User: ${data.user.firstName} ${data.user.lastName}`;
+                    // Store token for future requests
+                    localStorage.setItem('token', data.token);
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Login failed:</span> ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Login Error:</span> ${error.message}`;
+            }
+        }
+
+        async function testDeals() {
+            const resultDiv = document.getElementById('deals-result');
+            try {
+                const response = await fetch(`${API_BASE}/deals`);
+                const data = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Deals API working!</span><br>Found ${data.deals ? data.deals.length : 0} deals`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Deals API failed:</span> ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Deals Error:</span> ${error.message}`;
+            }
+        }
+
+        async function testUserProfile() {
+            const resultDiv = document.getElementById('profile-result');
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    resultDiv.innerHTML = `<span class="error">❌ No token found. Please login first.</span>`;
+                    return;
+                }
+
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = `<span class="success">✅ Profile API working!</span><br>User: ${data.user.first_name} ${data.user.last_name}<br>Email: ${data.user.email}`;
+                } else {
+                    resultDiv.innerHTML = `<span class="error">❌ Profile API failed:</span> ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ Profile Error:</span> ${error.message}`;
+            }
+        }
+
+        // Auto-test health on page load
+        window.onload = function() {
+            testHealth();
+        };
+    </script>
+</body>
+</html>
