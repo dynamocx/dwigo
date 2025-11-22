@@ -23,6 +23,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'terser',
+    minify: 'esbuild', // Changed from terser (faster, no extra dependency)
   },
 });

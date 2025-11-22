@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: |
       npm run install-all &&
-      cd client && npm run build
+      cd client && npm run build 2>&1 || (echo "Build failed, checking logs..." && exit 1)
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
