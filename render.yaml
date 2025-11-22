@@ -19,10 +19,7 @@ services:
           name: dwigo-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: dwigo-redis
-          type: redis
-          property: connectionString
+        value: ""  # Create Redis manually in Render dashboard and set this
       - key: JWT_SECRET
         generateValue: true
       - key: ADMIN_API_TOKEN
@@ -53,10 +50,7 @@ services:
           name: dwigo-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: dwigo-redis
-          type: redis
-          property: connectionString
+        value: ""  # Create Redis manually in Render dashboard and set this
       - key: JWT_SECRET
         sync: true
       - key: ADMIN_API_TOKEN
@@ -71,9 +65,4 @@ databases:
     plan: free
     databaseName: dwigo
     user: dwigo_user
-
-redis:
-  - name: dwigo-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
 
