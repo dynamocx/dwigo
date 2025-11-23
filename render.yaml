@@ -4,9 +4,7 @@ services:
     name: dwigo-app
     env: node
     plan: free
-    buildCommand: |
-      npm run install-all &&
-      cd client && test -f node_modules/vite/bin/vite.js && npm run build || (echo "vite not found, reinstalling..." && npm install vite && npm run build)
+    buildCommand: cd server && npm install
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
