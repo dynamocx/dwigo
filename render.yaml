@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: |
       npm run install-all &&
-      cd client && node node_modules/vite/bin/vite.js build
+      cd client && PATH=$PATH:./node_modules/.bin npm run build
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
