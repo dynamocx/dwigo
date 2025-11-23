@@ -12,30 +12,30 @@ app.use(helmet({
   contentSecurityPolicy: false, // Allow inline scripts for React
 }));
 // CORS configuration
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (process.env.NODE_ENV !== 'production') {
-      // Development: allow localhost
-      callback(null, true);
-    } else {
-      // Production: check against allowed origins
-      const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || [];
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn(`CORS blocked origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    }
-  },
+const getCorsOrigin = () => {
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://localhost:5173';
+  }
+  
+  const corsOrigin = process.env.CORS_ORIGIN;
+  if (!corsOrigin) {
+    console.warn('CORS_ORIGIN not set, allowing all origins');
+    return true; // Allow all in production if not configured
+  }
+  
+  // Split by comma and trim whitespace
+  const origins = corsOrigin.split(',').map(o => o.trim()).filter(o => o.length > 0);
+  console.log('CORS allowed origins:', origins);
+  return origins.length > 0 ? origins : true;
+};
+
+app.use(cors({
+  origin: getCorsOrigin(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token', 'X-Requested-With'],
   exposedHeaders: ['Content-Type', 'Authorization'],
-};
-
-app.use(cors(corsOptions));
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
