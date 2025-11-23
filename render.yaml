@@ -27,10 +27,10 @@ services:
         value: 0.25
       - key: ENABLE_SCHEDULER
         value: true
-            - key: JOB_WORKER_CONCURRENCY
-              value: 3
-            - key: CORS_ORIGIN
-              value: "https://dwigo.vercel.app,http://localhost:5173"
+      - key: JOB_WORKER_CONCURRENCY
+        value: 3
+      - key: CORS_ORIGIN
+        value: "https://dwigo.vercel.app,http://localhost:5173"
 
   # Note: Background Worker not available on free plan
   # Create manually: "New +" → "Background Worker" after deployment
