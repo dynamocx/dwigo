@@ -11,12 +11,31 @@ const PORT = process.env.PORT || 3001;
 app.use(helmet({
   contentSecurityPolicy: false, // Allow inline scripts for React
 }));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.CORS_ORIGIN?.split(',') || true // Allow specified origins or all
-    : 'http://localhost:5173',
+// CORS configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (process.env.NODE_ENV !== 'production') {
+      // Development: allow localhost
+      callback(null, true);
+    } else {
+      // Production: check against allowed origins
+      const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || [];
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS blocked origin: ${origin}. Allowed: ${allowedOrigins.join(', ')}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token', 'X-Requested-With'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
