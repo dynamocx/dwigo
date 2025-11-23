@@ -13,7 +13,7 @@ app.use(helmet({
 }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? true // Allow all origins in production (or specify your domain)
+    ? process.env.CORS_ORIGIN?.split(',') || true // Allow specified origins or all
     : 'http://localhost:5173',
   credentials: true,
 }));
