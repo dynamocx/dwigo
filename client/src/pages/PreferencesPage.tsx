@@ -1,4 +1,7 @@
-import { formatDistanceToNowStrict } from 'date-fns';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
@@ -101,7 +104,7 @@ const PreferencesPage = () => {
   const consentLastUpdated = useMemo(() => {
     if (!consentUpdatedAt) return 'Not yet recorded';
     try {
-      return `${formatDistanceToNowStrict(new Date(consentUpdatedAt))} ago`;
+      return dayjs(consentUpdatedAt).fromNow();
     } catch {
       return 'Recently updated';
     }
