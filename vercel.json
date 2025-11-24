@@ -1,14 +1,5 @@
 {
-  "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
-  "framework": "vite",
   "rewrites": [
-    {
-      "source": "/admin/:path*",
-      "destination": "/index.html"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
