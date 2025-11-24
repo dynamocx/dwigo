@@ -4,7 +4,7 @@ const {
   promoteIngestedDealsByIds,
   rejectIngestedDealsByIds,
 } = require('../../services/dealPromotion');
-const { enqueueJob } = require('../../jobs/queues');
+const { processIngestionJob } = require('../../services/ingestion');
 
 const router = express.Router();
 
@@ -205,13 +205,16 @@ router.post('/seed', async (req, res) => {
       deals: sampleDeals,
     };
 
-    await enqueueJob('ingestion', 'admin-test-seed', payload, {
-      removeOnComplete: true,
-      removeOnFail: false,
-    });
+    // Process the ingestion job directly (since we don't have a worker service on free tier)
+    const result = await processIngestionJob(payload);
 
     res.json({
-      data: { message: 'Ingestion job enqueued', dealCount: sampleDeals.length },
+      data: { 
+        message: 'Ingestion job processed', 
+        dealCount: sampleDeals.length,
+        jobId: result.jobId,
+        stats: result.stats,
+      },
       error: null,
       meta: {},
     });
