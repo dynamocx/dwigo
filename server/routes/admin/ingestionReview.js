@@ -191,7 +191,7 @@ router.post('/seed', async (req, res) => {
         rawPayload: {
           title: 'Michigan Mondays – 15% Off Local Pours',
           description: 'Celebrate the Mitten every Monday with 15% off all Michigan-made drafts and flights.',
-          category: 'Dining',
+          category: 'Restaurants',
           address: '518 E Shiawassee St, Lansing, MI 48912',
           city: 'Lansing',
           state: 'MI',
@@ -202,7 +202,7 @@ router.post('/seed', async (req, res) => {
         },
         normalizedPayload: {
           title: 'Michigan Mondays – 15% Off Local Pours',
-          category: 'Dining',
+          category: 'Restaurants',
           location: {
             city: 'Lansing',
             state: 'MI',
@@ -227,7 +227,7 @@ router.post('/seed', async (req, res) => {
         rawPayload: {
           title: 'Winter Wine Walk & Cheese Pairings',
           description: 'Stroll the greenhouse with live acoustic music, sample 6 curated wine and cheese pairings.',
-          category: 'Events',
+          category: 'Entertainment',
           address: '7420 W Saginaw Hwy, Lansing, MI 48917',
           city: 'Lansing',
           state: 'MI',
@@ -239,7 +239,7 @@ router.post('/seed', async (req, res) => {
         },
         normalizedPayload: {
           title: 'Winter Wine Walk & Cheese Pairings',
-          category: 'Events',
+          category: 'Entertainment',
           price: {
             currency: 'USD',
             amount: 25,
