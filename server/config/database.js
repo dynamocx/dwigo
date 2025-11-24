@@ -3,10 +3,10 @@ const { Pool } = require('pg');
 // Support both DATABASE_URL (cloud) and individual connection params (local)
 let poolConfig;
 if (process.env.DATABASE_URL) {
-  // Cloud deployment (Render, Heroku, etc.)
+  // Cloud deployment (Render, Heroku, etc.) - always requires SSL for external connections
   poolConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: { rejectUnauthorized: false }, // Required for Render PostgreSQL external connections
   };
 } else {
   // Local development
