@@ -60,4 +60,11 @@ export const rejectIngestionRows = (ids: number[]) =>
     buildConfig()
   );
 
+export const seedIngestionJob = () =>
+  dwigo.post<never, { message: string; dealCount: number }>(
+    '/admin/ingestion/seed',
+    undefined,
+    buildConfig()
+  );
+
 

@@ -23,6 +23,7 @@ import {
   fetchPendingIngestionRows,
   promoteIngestionRows,
   rejectIngestionRows,
+  seedIngestionJob,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
@@ -102,6 +103,16 @@ const IngestionReviewPage = () => {
     },
   });
 
+  const seedMutation = useMutation({
+    mutationFn: () => seedIngestionJob(),
+    onSuccess: () => {
+      // Wait a moment for the job to process, then refresh
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+      }, 2000);
+    },
+  });
+
   const rows: IngestedDealRow[] = pendingQuery.data?.data ?? [];
 
   return (
@@ -130,7 +141,21 @@ const IngestionReviewPage = () => {
       ) : null}
 
       {rows.length === 0 && !pendingQuery.isLoading ? (
-        <Alert severity="success">No pending ingestion rows 🎉</Alert>
+        <Alert 
+          severity="info"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isLoading}
+            >
+              {seedMutation.isLoading ? 'Seeding...' : 'Seed Test Deals'}
+            </Button>
+          }
+        >
+          No pending ingestion rows. Click "Seed Test Deals" to create sample deals for testing.
+        </Alert>
       ) : null}
 
       <Grid container spacing={2}>
