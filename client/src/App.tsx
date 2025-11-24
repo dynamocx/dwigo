@@ -56,7 +56,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-      <Route path="admin/ingestion" element={<IngestionReviewPage />} />
+        <Route path="admin/ingestion" element={<IngestionReviewPage />} />
       </Route>
       <Route path="login" element={<LoginPage />} />
       <Route path="register" element={<RegisterPage />} />
