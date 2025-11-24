@@ -100,16 +100,20 @@ const insertMerchant = async (client, businessName, rawPayload = {}, normalizedP
 const ensureMerchantAlias = async (client, merchantId, alias, source, confidence) => {
   if (!alias) return;
 
+  // Ensure alias is a string to avoid type inference issues
+  const aliasStr = String(alias);
+  const sourceStr = source ? String(source) : null;
+
   await client.query(
     `
       INSERT INTO merchant_aliases (merchant_id, alias, source, confidence)
-      SELECT $1, $2, $3, $4
+      SELECT $1, $2::VARCHAR, $3::VARCHAR, $4
       WHERE NOT EXISTS (
         SELECT 1 FROM merchant_aliases
-        WHERE merchant_id = $1 AND LOWER(alias) = LOWER($2)
+        WHERE merchant_id = $1 AND LOWER(alias) = LOWER($2::VARCHAR)
       )
     `,
-    [merchantId, alias, source ?? null, confidence != null ? Number(confidence) : null]
+    [merchantId, aliasStr, sourceStr, confidence != null ? Number(confidence) : null]
   );
 };
 
