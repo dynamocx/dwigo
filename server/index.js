@@ -69,22 +69,17 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware (before static files)
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-// Serve static files from React app in production (after API routes)
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-  
-  // Handle React routing, return all requests to React app
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-  });
-}
+// Note: Frontend is served by Vercel, not from this server
+// All non-API routes should return 404
+app.get('*', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
 
 app.listen(PORT, () => {
   console.log(`DWIGO Server running on port ${PORT}`);
