@@ -89,6 +89,9 @@ const IngestionReviewPage = () => {
     mutationFn: (ids: number[]) => promoteIngestionRows(ids),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+      // Invalidate deals queries so promoted deals show up immediately
+      void queryClient.invalidateQueries({ queryKey: ['deals'] });
+      void queryClient.invalidateQueries({ queryKey: ['personalised-deals'] });
     },
   });
 
