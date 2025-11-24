@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
       SELECT d.*, m.business_name, m.address, m.city, m.state, 
              m.latitude, m.longitude, m.business_type
       FROM deals d
-      JOIN merchants m ON d.merchant_id = m.id
+      INNER JOIN merchants m ON d.merchant_id = m.id
       WHERE d.status = 'active' AND (d.end_date IS NULL OR d.end_date > NOW())
     `;
 

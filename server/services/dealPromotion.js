@@ -305,6 +305,12 @@ const promoteIngestedRows = async (rows) => {
         // When manually promoted via admin, always set status to 'active' (admin approval overrides confidence)
         // But we can still log quality issues for admin awareness
         fields.status = 'active';
+        
+        // Ensure merchant exists (should always exist from findOrCreateMerchant above)
+        if (!merchant || !merchant.id) {
+          throw new Error(`Merchant not found/created for row ${row.id}`);
+        }
+        
         const deal = await insertDeal(
           client,
           merchant,
@@ -336,7 +342,7 @@ const promoteIngestedRows = async (rows) => {
 
         await client.query('COMMIT');
         stats.promoted += 1;
-        console.log(`[dealPromotion] promoted deal ${deal.id} from ingested row ${row.id}`);
+        console.log(`[dealPromotion] promoted deal ${deal.id} (merchant_id: ${deal.merchant_id}, status: ${deal.status}, end_date: ${deal.end_date}) from ingested row ${row.id}`);
       } catch (error) {
         await client.query('ROLLBACK');
         stats.errors += 1;
