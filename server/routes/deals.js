@@ -52,6 +52,23 @@ router.get('/', async (req, res) => {
     params.push(parseInt(limit));
 
     const result = await pool.query(query, params);
+    
+    // Debug logging in development
+    if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_DEALS === 'true') {
+      console.log(`[deals] Query returned ${result.rows.length} deals`);
+      if (result.rows.length > 0) {
+        console.log(`[deals] Sample deal:`, {
+          id: result.rows[0].id,
+          title: result.rows[0].title,
+          status: result.rows[0].status,
+          category: result.rows[0].category,
+          end_date: result.rows[0].end_date,
+          merchant_id: result.rows[0].merchant_id,
+          business_name: result.rows[0].business_name,
+        });
+      }
+    }
+    
     res.json(
       buildEnvelope({
         data: result.rows,
