@@ -122,6 +122,67 @@ router.post('/reject', async (req, res) => {
   }
 });
 
+router.get('/debug/deals', async (req, res) => {
+  try {
+    // Get all deals with their merchant info
+    const { rows: allDeals } = await pool.query(`
+      SELECT 
+        d.id,
+        d.title,
+        d.status,
+        d.category,
+        d.end_date,
+        d.created_at,
+        d.merchant_id,
+        m.business_name,
+        CASE 
+          WHEN d.end_date IS NULL THEN 'no end date'
+          WHEN d.end_date > NOW() THEN 'future'
+          ELSE 'past'
+        END as end_date_status,
+        CASE 
+          WHEN m.id IS NULL THEN 'no merchant'
+          ELSE 'has merchant'
+        END as merchant_status
+      FROM deals d
+      LEFT JOIN merchants m ON d.merchant_id = m.id
+      ORDER BY d.created_at DESC
+      LIMIT 20
+    `);
+
+    // Get deals that should appear in the main query
+    const { rows: visibleDeals } = await pool.query(`
+      SELECT d.id, d.title, d.status, d.category, d.end_date, m.business_name
+      FROM deals d
+      INNER JOIN merchants m ON d.merchant_id = m.id
+      WHERE d.status = 'active' AND (d.end_date IS NULL OR d.end_date > NOW())
+      ORDER BY d.created_at DESC
+      LIMIT 20
+    `);
+
+    res.json({
+      data: {
+        allDeals,
+        visibleDeals,
+        summary: {
+          total: allDeals.length,
+          visible: visibleDeals.length,
+          hidden: allDeals.length - visibleDeals.length,
+        },
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ingestion] debug error', error);
+    res.status(500).json({
+      data: null,
+      error: { message: 'Failed to debug deals' },
+      meta: {},
+    });
+  }
+});
+
 router.post('/seed', async (req, res) => {
   try {
     const sampleDeals = [

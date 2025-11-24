@@ -36,7 +36,9 @@ const extractDealFields = (row, rawPayload = {}, normalizedPayload = {}, jobInfo
     rawPayload.title ||
     `Deal ${row.id}`;
   const description = normalizedPayload.description || rawPayload.description || null;
-  const category = normalizedPayload.category || rawPayload.category || null;
+  // Normalize category to lowercase for consistency
+  const categoryRaw = normalizedPayload.category || rawPayload.category || null;
+  const category = categoryRaw ? String(categoryRaw).toLowerCase() : null;
   const subcategory = normalizedPayload.subcategory || rawPayload.subcategory || null;
 
   const price = normalizedPayload.price || {};
