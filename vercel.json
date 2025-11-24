@@ -1,6 +1,5 @@
 {
-  "installCommand": "npm run install-all",
-  "buildCommand": "npm run build",
+  "buildCommand": "npm install && cd client && npm install && npm run build",
   "outputDirectory": "client/dist",
   "rewrites": [
     {
