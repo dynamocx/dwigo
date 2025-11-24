@@ -7,6 +7,7 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "worker": "node jobs/worker.js",
+    "setup:db": "node scripts/setupDatabase.js",
     "ingest:seed": "node scripts/seedIngestionJob.js",
     "ingest:promote": "node scripts/promoteIngestedDeals.js",
     "ingest:crawl:lansing": "node scripts/crawlLansingBrewery.js",
