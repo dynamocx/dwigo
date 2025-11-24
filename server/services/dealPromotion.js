@@ -344,7 +344,34 @@ const promoteIngestedRows = async (rows) => {
 
         await client.query('COMMIT');
         stats.promoted += 1;
-        console.log(`[dealPromotion] promoted deal ${deal.id} (merchant_id: ${deal.merchant_id}, status: ${deal.status}, end_date: ${deal.end_date}) from ingested row ${row.id}`);
+        
+        // Verify the deal will appear in queries
+        const { rows: verifyRows } = await client.query(`
+          SELECT d.id, d.status, d.end_date, m.id as merchant_exists
+          FROM deals d
+          LEFT JOIN merchants m ON d.merchant_id = m.id
+          WHERE d.id = $1
+        `, [deal.id]);
+        
+        const verify = verifyRows[0];
+        const willAppear = verify && 
+          verify.status === 'active' && 
+          verify.merchant_exists !== null &&
+          (verify.end_date === null || new Date(verify.end_date) > new Date());
+        
+        console.log(`[dealPromotion] promoted deal ${deal.id}:
+          - merchant_id: ${deal.merchant_id}
+          - status: ${deal.status}
+          - end_date: ${deal.end_date}
+          - category: ${deal.category}
+          - will appear in queries: ${willAppear}
+          - merchant exists: ${verify?.merchant_exists !== null}
+          - end_date valid: ${verify?.end_date === null || new Date(verify.end_date) > new Date()}
+        `);
+        
+        if (!willAppear) {
+          console.warn(`[dealPromotion] WARNING: Deal ${deal.id} will NOT appear in deals query!`);
+        }
       } catch (error) {
         await client.query('ROLLBACK');
         stats.errors += 1;
