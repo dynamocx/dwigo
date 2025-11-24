@@ -11,55 +11,26 @@ const PORT = process.env.PORT || 3001;
 app.use(helmet({
   contentSecurityPolicy: false, // Allow inline scripts for React
 }));
-// CORS configuration
-const resolveCorsOrigins = () => {
-  if (process.env.NODE_ENV !== 'production') {
-    return ['http://localhost:5173'];
-  }
 
+// CORS configuration - must be before routes
+const getCorsOrigin = () => {
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://localhost:5173';
+  }
+  
   const corsOrigin = process.env.CORS_ORIGIN;
   if (!corsOrigin) {
-    console.warn('CORS_ORIGIN not set, allowing all origins');
+    console.warn('⚠️  CORS_ORIGIN not set, allowing all origins');
     return true;
   }
-
-  const origins = corsOrigin.split(',').map((origin) => origin.trim()).filter(Boolean);
-  console.log('CORS allowed origins:', origins);
+  
+  const origins = corsOrigin.split(',').map(o => o.trim()).filter(o => o.length > 0);
+  console.log('✅ CORS allowed origins:', origins);
   return origins.length > 0 ? origins : true;
 };
 
-const allowedOrigins = resolveCorsOrigins();
-const isOriginAllowed = (origin) => {
-  if (!origin) return false;
-  if (allowedOrigins === true) return true;
-  return allowedOrigins.includes(origin);
-};
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (origin && isOriginAllowed(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin');
-  }
-
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-token, X-Requested-With');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-
-  if (req.method === 'OPTIONS') {
-    if (!origin || isOriginAllowed(origin)) {
-      return res.sendStatus(204);
-    }
-    console.warn(`CORS preflight blocked origin: ${origin}`);
-    return res.sendStatus(403);
-  }
-
-  next();
-});
-
 app.use(cors({
-  origin: allowedOrigins,
+  origin: getCorsOrigin(),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token', 'X-Requested-With'],
