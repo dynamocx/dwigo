@@ -50,6 +50,9 @@ router.get('/', authMiddleware, async (req, res) => {
 // Update user preferences
 router.put('/', authMiddleware, async (req, res) => {
   try {
+    console.log('[preferences] Update request received for user:', req.user.userId);
+    console.log('[preferences] Request body:', JSON.stringify(req.body, null, 2));
+    
     const {
       preferredCategories,
       preferredBrands,
@@ -122,6 +125,11 @@ router.put('/', authMiddleware, async (req, res) => {
       );
     }
     
+    console.log('[preferences] Successfully saved preferences:', {
+      operation: existing.rows.length > 0 ? 'updated' : 'created',
+      userId: req.user.userId,
+    });
+    
     res.json(
       buildEnvelope({
         data: result.rows[0],
@@ -129,13 +137,21 @@ router.put('/', authMiddleware, async (req, res) => {
       })
     );
   } catch (error) {
-    console.error('Update preferences error:', error);
+    console.error('[preferences] Update preferences error:', error);
+    console.error('[preferences] Error details:', {
+      message: error.message,
+      stack: error.stack,
+      userId: req.user?.userId,
+    });
     res
       .status(500)
       .json(
         buildEnvelope({
           data: null,
-          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+          error: { 
+            message: error.message || 'Internal server error', 
+            code: 'INTERNAL_ERROR' 
+          },
         })
       );
   }

@@ -317,14 +317,24 @@ router.post('/:id/save', authMiddleware, async (req, res) => {
 router.get('/saved', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
+    console.log(`[deals/saved] Fetching saved deals for user ${userId}`);
+    
+    // First check if user has any saved deals
+    const interactionCheck = await pool.query(
+      'SELECT COUNT(*) as count FROM user_deal_interactions WHERE user_id = $1 AND interaction_type = $2',
+      [userId, 'saved']
+    );
+    console.log(`[deals/saved] User has ${interactionCheck.rows[0].count} saved interactions`);
     
     // Use explicit column selection to avoid conflicts
+    // Handle both status column and legacy is_active column
     const result = await pool.query(`
       SELECT 
         d.id, d.merchant_id, d.location_id, d.title, d.description,
         d.original_price, d.deal_price, d.discount_percentage,
         d.category, d.subcategory, d.start_date, d.end_date,
-        d.max_redemptions, d.current_redemptions, d.status,
+        d.max_redemptions, d.current_redemptions,
+        COALESCE(d.status, CASE WHEN d.is_active = true THEN 'active' ELSE 'archived' END) as status,
         d.visibility, d.source_type, d.source_reference, d.source_details,
         d.confidence_score, d.last_seen_at, d.inventory_remaining,
         d.image_url, d.terms_conditions, d.created_at, d.updated_at,
@@ -336,10 +346,12 @@ router.get('/saved', authMiddleware, async (req, res) => {
       JOIN user_deal_interactions udi ON d.id = udi.deal_id
       WHERE udi.user_id = $1 
         AND udi.interaction_type = 'saved'
-        AND d.status = 'active'
+        AND (COALESCE(d.status, CASE WHEN d.is_active = true THEN 'active' ELSE 'archived' END) = 'active')
         AND (d.end_date IS NULL OR d.end_date > NOW())
       ORDER BY udi.created_at DESC
     `, [userId]);
+    
+    console.log(`[deals/saved] Query returned ${result.rows.length} deals`);
 
     // Extract source_reference from source_details for each deal
     const deals = result.rows.map((deal) => {
