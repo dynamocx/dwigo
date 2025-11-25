@@ -97,6 +97,7 @@ const PreferencesPage = () => {
     onSuccess: (response) => {
       const updated = response.data;
       setConsentUpdatedAt(updated?.consentUpdatedAt ?? new Date().toISOString());
+      setHasUserMadeChanges(false); // Reset after successful save
       void preferencesQuery.refetch();
     },
   });
