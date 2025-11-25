@@ -231,7 +231,9 @@ const DealBasketPage = () => {
                   borderColor: 'primary.main',
                   borderRadius: 2,
                   p: 3,
-                  bgcolor: (theme) => theme.palette.primary.light + '40', // Lighter blue with opacity
+                  bgcolor: (theme) => theme.palette.mode === 'light' 
+                    ? 'rgba(25, 118, 210, 0.08)' // Very light blue for better text readability
+                    : theme.palette.primary.dark + '20',
                 }}
               >
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
