@@ -319,7 +319,7 @@ router.get('/saved', authMiddleware, async (req, res) => {
     const userId = req.user.userId;
     
     const result = await pool.query(`
-      SELECT d.*, d.source_details, d.source_reference, d.source_type,
+      SELECT d.*,
              m.business_name, m.address, m.city, m.state,
              m.latitude, m.longitude, m.business_type, m.website,
              true as is_saved
@@ -351,12 +351,20 @@ router.get('/saved', authMiddleware, async (req, res) => {
     res.json(buildEnvelope({ data: deals, meta: { total: deals.length } }));
   } catch (error) {
     console.error('Get saved deals error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      userId: req.user?.userId,
+    });
     res
       .status(500)
       .json(
         buildEnvelope({
           data: [],
-          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+          error: { 
+            message: error.message || 'Internal server error', 
+            code: 'INTERNAL_ERROR' 
+          },
         })
       );
   }
