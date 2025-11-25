@@ -73,11 +73,16 @@ router.put('/', authMiddleware, async (req, res) => {
     let result;
     if (existing.rows.length > 0) {
       // Update existing preferences
+      console.log('[preferences] Updating existing preferences for user:', req.user.userId);
       result = await pool.query(
         `UPDATE user_preferences SET 
-          preferred_categories = $1, preferred_brands = $2, preferred_locations = $3,
-          budget_preferences = $4, notification_settings = $5, travel_preferences = $6,
-          privacy_settings = COALESCE($7, privacy_settings),
+          preferred_categories = $1::jsonb, 
+          preferred_brands = $2::jsonb, 
+          preferred_locations = $3::jsonb,
+          budget_preferences = $4::jsonb, 
+          notification_settings = $5::jsonb, 
+          travel_preferences = $6::jsonb,
+          privacy_settings = COALESCE($7::jsonb, privacy_settings),
           consent_version = COALESCE($8, consent_version),
           consent_updated_at = CASE WHEN $8 IS NOT NULL THEN NOW() ELSE consent_updated_at END,
           updated_at = NOW()
@@ -93,20 +98,26 @@ router.put('/', authMiddleware, async (req, res) => {
           consent_version AS "consentVersion",
           consent_updated_at AS "consentUpdatedAt"`,
         [
-          preferredCategories, preferredBrands, preferredLocations,
-          budgetPreferences, notificationSettings, travelPreferences,
-          privacySettings, consentVersion,
+          JSON.stringify(preferredCategories || []), 
+          JSON.stringify(preferredBrands || []), 
+          JSON.stringify(preferredLocations || []),
+          budgetPreferences ? JSON.stringify(budgetPreferences) : null, 
+          notificationSettings ? JSON.stringify(notificationSettings) : null, 
+          travelPreferences ? JSON.stringify(travelPreferences) : null,
+          privacySettings ? JSON.stringify(privacySettings) : null, 
+          consentVersion,
           req.user.userId
         ]
       );
     } else {
       // Create new preferences
+      console.log('[preferences] Creating new preferences for user:', req.user.userId);
       result = await pool.query(
         `INSERT INTO user_preferences (
           user_id, preferred_categories, preferred_brands, preferred_locations,
           budget_preferences, notification_settings, travel_preferences,
           privacy_settings, consent_version, consent_updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $9 IS NOT NULL THEN NOW() ELSE NULL END)
+        ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, CASE WHEN $9 IS NOT NULL THEN NOW() ELSE NULL END)
         RETURNING 
           preferred_categories AS "preferredCategories",
           preferred_brands AS "preferredBrands",
@@ -118,9 +129,15 @@ router.put('/', authMiddleware, async (req, res) => {
           consent_version AS "consentVersion",
           consent_updated_at AS "consentUpdatedAt"`,
         [
-          req.user.userId, preferredCategories, preferredBrands, preferredLocations,
-          budgetPreferences, notificationSettings, travelPreferences,
-          privacySettings, consentVersion
+          req.user.userId, 
+          JSON.stringify(preferredCategories || []), 
+          JSON.stringify(preferredBrands || []), 
+          JSON.stringify(preferredLocations || []),
+          budgetPreferences ? JSON.stringify(budgetPreferences) : null, 
+          notificationSettings ? JSON.stringify(notificationSettings) : null, 
+          travelPreferences ? JSON.stringify(travelPreferences) : null,
+          privacySettings ? JSON.stringify(privacySettings) : null, 
+          consentVersion
         ]
       );
     }

@@ -86,8 +86,8 @@ const PreferencesPage = () => {
   }, [preferencesQuery.data, user]);
 
   const updateMutation = useMutation({
-    mutationFn: () =>
-      updatePreferences({
+    mutationFn: async () => {
+      const payload = {
         preferredCategories: categories,
         preferredBrands: brands,
         preferredLocations: preferredCities,
@@ -104,7 +104,17 @@ const PreferencesPage = () => {
           marketingEmails: privacy.marketingEmails,
         },
         consentVersion: CONSENT_VERSION,
-      }),
+      };
+      console.log('[Preferences] Calling updatePreferences with payload:', JSON.stringify(payload, null, 2));
+      try {
+        const result = await updatePreferences(payload);
+        console.log('[Preferences] updatePreferences returned:', result);
+        return result;
+      } catch (error) {
+        console.error('[Preferences] updatePreferences threw error:', error);
+        throw error;
+      }
+    },
     onSuccess: async (response) => {
       console.log('[Preferences] Save successful:', response);
       const updated = response.data;
