@@ -12,6 +12,7 @@ import {
 
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
 import { useAuth } from '@/auth/AuthContext';
+import { useLocation } from '@/contexts/LocationContext';
 import { fetchDeals, fetchPersonalisedDeals, toggleDealSaved } from '@/api/deals';
 import ErrorState from '@/components/common/ErrorState';
 import DealCard from '@/features/deals/components/DealCard';
@@ -23,20 +24,28 @@ const CATEGORIES = ['Restaurants', 'Shopping', 'Entertainment', 'Travel', 'Home'
 const DealsPage = () => {
   const theme = useTheme();
   const { user } = useAuth();
+  const { selectedLocation } = useLocation();
   const queryClient = useQueryClient();
   const { trackEvent } = useAnalytics();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  // Build location param if location is selected
+  const locationParam = selectedLocation
+    ? `${selectedLocation.latitude},${selectedLocation.longitude}`
+    : undefined;
+
   const dealsQuery = useQuery({
-    queryKey: ['deals', selectedCategory],
+    queryKey: ['deals', selectedCategory, locationParam, selectedLocation?.radius],
     queryFn: () =>
-      fetchDeals(
-        selectedCategory
+      fetchDeals({
+        ...(selectedCategory ? { category: selectedCategory.toLowerCase() } : {}),
+        ...(locationParam
           ? {
-              category: selectedCategory.toLowerCase(),
+              location: locationParam,
+              radius: selectedLocation?.radius ?? 15,
             }
-          : undefined
-      ),
+          : {}),
+      }),
   });
 
   const personalisedDealsQuery = useQuery({

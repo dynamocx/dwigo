@@ -9,6 +9,7 @@ import './index.css';
 import { AuthProvider } from './auth/AuthContext';
 import { AnalyticsProvider } from './analytics/AnalyticsProvider';
 import { FeatureFlagProvider } from './flags/FeatureFlagContext';
+import { LocationProvider } from './contexts/LocationContext';
 import theme from './theme';
 
 const queryClient = new QueryClient({
@@ -27,12 +28,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <FeatureFlagProvider>
           <AnalyticsProvider>
-            <ThemeProvider theme={theme}>
-              <CssBaseline />
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
-            </ThemeProvider>
+            <LocationProvider>
+              <ThemeProvider theme={theme}>
+                <CssBaseline />
+                <BrowserRouter>
+                  <App />
+                </BrowserRouter>
+              </ThemeProvider>
+            </LocationProvider>
           </AnalyticsProvider>
         </FeatureFlagProvider>
       </AuthProvider>

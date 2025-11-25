@@ -16,7 +16,7 @@ const buildEnvelope = ({ data, error = null, meta = {} }) => ({
 // Get all active deals
 router.get('/', async (req, res) => {
   try {
-    const { category, location, radius = 10, limit = 50 } = req.query;
+    const { category, location, radius = 15, limit = 50 } = req.query;
 
     let query = `
       SELECT d.*, m.business_name, m.address, m.city, m.state, 
@@ -154,27 +154,45 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     }
     
     // Filter by preferred locations (if user has location enabled)
-    const userResult = await pool.query(
-      'SELECT current_latitude, current_longitude FROM users WHERE id = $1',
-      [userId]
-    );
+    // Also check for location query param (from frontend location picker)
+    const { location, radius = 15 } = req.query;
+    let locationLat: number | null = null;
+    let locationLng: number | null = null;
+    let locationRadius = 15000; // 15km default in meters
 
-    if (userResult.rows[0]?.current_latitude && userResult.rows[0]?.current_longitude) {
+    if (location) {
+      const [lat, lng] = location.split(',').map(Number);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        locationLat = lat;
+        locationLng = lng;
+        locationRadius = Number(radius) * 1000; // Convert km to meters
+      }
+    } else {
+      // Fall back to user's saved location if no query param
+      const userResult = await pool.query(
+        'SELECT current_latitude, current_longitude FROM users WHERE id = $1',
+        [userId]
+      );
+
+      if (userResult.rows[0]?.current_latitude && userResult.rows[0]?.current_longitude) {
+        locationLat = userResult.rows[0].current_latitude;
+        locationLng = userResult.rows[0].current_longitude;
+        locationRadius = 15000; // 15km default
+      }
+    }
+
+    if (locationLat !== null && locationLng !== null) {
       paramCount += 3;
       query += ` AND ST_DWithin(
         ST_Point(m.longitude, m.latitude)::geography,
         ST_Point($${paramCount - 1}, $${paramCount - 2})::geography,
         $${paramCount}
       )`;
-      params.push(
-        userResult.rows[0].current_longitude,
-        userResult.rows[0].current_latitude,
-        5000 // 5km radius
-      );
+      params.push(locationLng, locationLat, locationRadius);
       meta.filters.location = {
-        latitude: userResult.rows[0].current_latitude,
-        longitude: userResult.rows[0].current_longitude,
-        radius: 5000,
+        latitude: locationLat,
+        longitude: locationLng,
+        radius: locationRadius / 1000, // Convert back to km for meta
       };
     }
 

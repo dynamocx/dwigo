@@ -79,8 +79,15 @@ const transformDealsEnvelope = (envelope: DwigoEnvelope<DealResponse[] | undefin
   data: (envelope.data ?? []).map(mapDeal),
 });
 
+export interface FetchDealsParams {
+  category?: string;
+  location?: string; // "lat,lng" format
+  radius?: number; // in km, defaults to 15
+  limit?: number;
+}
+
 export const fetchDeals = async (
-  params?: Record<string, string | number | undefined>
+  params?: FetchDealsParams
 ): Promise<DwigoEnvelope<Deal[]>> => {
   const envelope = await dwigo.get<DealResponse[]>('/deals', { params });
   return transformDealsEnvelope(envelope);
