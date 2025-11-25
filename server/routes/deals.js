@@ -156,8 +156,8 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     // Filter by preferred locations (if user has location enabled)
     // Also check for location query param (from frontend location picker)
     const { location, radius = 15 } = req.query;
-    let locationLat: number | null = null;
-    let locationLng: number | null = null;
+    let locationLat = null;
+    let locationLng = null;
     let locationRadius = 15000; // 15km default in meters
 
     if (location) {
