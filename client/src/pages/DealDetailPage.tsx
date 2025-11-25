@@ -29,7 +29,6 @@ import BusinessIcon from '@mui/icons-material/Business';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import DirectionsIcon from '@mui/icons-material/Directions';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
 import { useAuth } from '@/auth/AuthContext';
