@@ -46,6 +46,8 @@ const PreferencesPage = () => {
     marketingEmails: true,
   });
   const [consentUpdatedAt, setConsentUpdatedAt] = useState<string | null>(null);
+  const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
+  const [hasUserMadeChanges, setHasUserMadeChanges] = useState(false);
 
   const preferencesQuery = useQuery({ queryKey: ['preferences'], queryFn: fetchPreferences, enabled: Boolean(user) });
 
@@ -68,6 +70,8 @@ const PreferencesPage = () => {
       marketingEmails: pref.privacySettings?.marketingEmails ?? Boolean(pref.notificationSettings?.email),
     });
     setConsentUpdatedAt(pref.consentUpdatedAt ?? null);
+    setHasLoadedInitialData(true);
+    setHasUserMadeChanges(false);
   }, [preferencesQuery.data]);
 
   const updateMutation = useMutation({
@@ -100,23 +104,24 @@ const PreferencesPage = () => {
   // Auto-save preferences when user makes changes (debounced)
   useEffect(() => {
     // Don't auto-save on initial load
-    if (!preferencesQuery.data) return;
+    if (!hasLoadedInitialData || !hasUserMadeChanges) return;
     
-    // Don't auto-save if preferences haven't loaded yet
+    // Don't auto-save if preferences are loading
     if (preferencesQuery.isLoading) return;
 
     const timeoutId = setTimeout(() => {
-      // Only auto-save if user is logged in and has made changes
-      if (user && (categories.length > 0 || brands.length > 0 || preferredCities.length > 0)) {
+      // Only auto-save if user is logged in
+      if (user) {
         updateMutation.mutate();
       }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user]);
+  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user, hasLoadedInitialData, hasUserMadeChanges]);
 
   const handleToggle = (value: string, current: string[], setter: (next: string[]) => void) => {
     setter(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+    setHasUserMadeChanges(true);
   };
 
   const consentLastUpdated = useMemo(() => {
@@ -218,12 +223,18 @@ const PreferencesPage = () => {
         <Stack spacing={1}>
           <FormControlLabel
             control={
-              <Switch checked={notificationsEnabled} onChange={(event) => setNotificationsEnabled(event.target.checked)} />
+              <Switch checked={notificationsEnabled} onChange={(event) => {
+                setNotificationsEnabled(event.target.checked);
+                setHasUserMadeChanges(true);
+              }} />
             }
             label="Push notifications when deals are nearby"
           />
           <FormControlLabel
-            control={<Switch checked={emailUpdates} onChange={(event) => setEmailUpdates(event.target.checked)} />}
+            control={<Switch checked={emailUpdates} onChange={(event) => {
+              setEmailUpdates(event.target.checked);
+              setHasUserMadeChanges(true);
+            }} />}
             label="Email me weekly DWIGO recaps"
           />
         </Stack>
@@ -241,13 +252,14 @@ const PreferencesPage = () => {
             control={
               <Switch
                 checked={privacy.preciseLocation}
-                onChange={(event) =>
+                onChange={(event) => {
                   setPrivacy((prev) => ({
                     ...prev,
                     preciseLocation: event.target.checked,
                     approximateLocation: event.target.checked || prev.approximateLocation,
-                  }))
-                }
+                  }));
+                  setHasUserMadeChanges(true);
+                }}
               />
             }
             label="Share precise location for doorstep-level deal alerts"
@@ -256,12 +268,13 @@ const PreferencesPage = () => {
             control={
               <Switch
                 checked={privacy.approximateLocation}
-                onChange={(event) =>
+                onChange={(event) => {
                   setPrivacy((prev) => ({
                     ...prev,
                     approximateLocation: event.target.checked,
-                  }))
-                }
+                  }));
+                  setHasUserMadeChanges(true);
+                }}
               />
             }
             label="Share approximate city-level location"
@@ -270,12 +283,13 @@ const PreferencesPage = () => {
             control={
               <Switch
                 checked={privacy.personalization}
-                onChange={(event) =>
+                onChange={(event) => {
                   setPrivacy((prev) => ({
                     ...prev,
                     personalization: event.target.checked,
-                  }))
-                }
+                  }));
+                  setHasUserMadeChanges(true);
+                }}
               />
             }
             label="Use my activity to personalise agent recommendations"
@@ -290,6 +304,7 @@ const PreferencesPage = () => {
                     marketingEmails: event.target.checked,
                   }));
                   setEmailUpdates(event.target.checked);
+                  setHasUserMadeChanges(true);
                 }}
               />
             }
