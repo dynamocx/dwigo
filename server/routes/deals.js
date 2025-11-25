@@ -287,7 +287,7 @@ router.get('/saved', authMiddleware, async (req, res) => {
         d.original_price, d.deal_price, d.discount_percentage,
         d.category, d.subcategory, d.start_date, d.end_date,
         d.max_redemptions, d.current_redemptions,
-        COALESCE(d.status, CASE WHEN d.is_active = true THEN 'active' ELSE 'archived' END, 'active') as status,
+        COALESCE(d.status, 'active') as status,
         COALESCE(d.visibility, 'public') as visibility,
         d.source_type, d.source_reference, d.source_details,
         d.confidence_score, d.last_seen_at, d.inventory_remaining,
