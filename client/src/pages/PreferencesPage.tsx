@@ -59,9 +59,15 @@ const PreferencesPage = () => {
   useEffect(() => {
     const envelope = preferencesQuery.data;
     if (!envelope || !envelope.data) {
+      // If no preferences exist yet, mark as loaded so we can start saving
+      if (envelope && !envelope.error && user) {
+        setHasLoadedInitialData(true);
+        setHasUserMadeChanges(false);
+      }
       return;
     }
     const pref = envelope.data;
+    console.log('[Preferences] Loading preferences data:', pref);
     setCategories(pref.preferredCategories ?? []);
     setBrands(pref.preferredBrands ?? []);
     setPreferredCities(pref.preferredLocations ?? []);
@@ -77,7 +83,7 @@ const PreferencesPage = () => {
     setConsentUpdatedAt(pref.consentUpdatedAt ?? null);
     setHasLoadedInitialData(true);
     setHasUserMadeChanges(false);
-  }, [preferencesQuery.data]);
+  }, [preferencesQuery.data, user]);
 
   const updateMutation = useMutation({
     mutationFn: () =>
@@ -138,23 +144,38 @@ const PreferencesPage = () => {
   // Auto-save preferences when user makes changes (debounced)
   useEffect(() => {
     // Don't auto-save on initial load
-    if (!hasLoadedInitialData || !hasUserMadeChanges) return;
+    if (!hasLoadedInitialData || !hasUserMadeChanges) {
+      console.log('[Preferences] Auto-save skipped:', { hasLoadedInitialData, hasUserMadeChanges });
+      return;
+    }
     
     // Don't auto-save if preferences are loading
-    if (preferencesQuery.isLoading) return;
+    if (preferencesQuery.isLoading) {
+      console.log('[Preferences] Auto-save skipped: preferences loading');
+      return;
+    }
     
     // Don't auto-save if mutation is already in progress
-    if (updateMutation.isPending) return;
+    if (updateMutation.isPending) {
+      console.log('[Preferences] Auto-save skipped: mutation in progress');
+      return;
+    }
 
+    console.log('[Preferences] Setting up auto-save timer...');
     const timeoutId = setTimeout(() => {
       // Only auto-save if user is logged in
       if (user) {
         console.log('[Preferences] Auto-saving preferences...');
         updateMutation.mutate();
+      } else {
+        console.log('[Preferences] Auto-save skipped: no user');
       }
     }, 2000); // 2 second debounce
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      console.log('[Preferences] Clearing auto-save timer');
+      clearTimeout(timeoutId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user, hasLoadedInitialData, hasUserMadeChanges]);
 

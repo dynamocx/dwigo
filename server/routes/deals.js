@@ -326,6 +326,10 @@ router.get('/saved', authMiddleware, async (req, res) => {
     );
     console.log(`[deals/saved] User has ${interactionCheck.rows[0].count} saved interactions`);
     
+    if (Number(interactionCheck.rows[0].count) === 0) {
+      return res.json(buildEnvelope({ data: [], meta: { total: 0 } }));
+    }
+    
     // Use explicit column selection to avoid conflicts
     // Handle both status column and legacy is_active column
     const result = await pool.query(`
