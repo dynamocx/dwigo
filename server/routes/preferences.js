@@ -83,7 +83,7 @@ router.put('/', authMiddleware, async (req, res) => {
           notification_settings = $5::jsonb, 
           travel_preferences = $6::jsonb,
           privacy_settings = COALESCE($7::jsonb, privacy_settings),
-          consent_version = COALESCE($8, consent_version),
+          consent_version = COALESCE($8::varchar, consent_version),
           consent_updated_at = CASE WHEN $8 IS NOT NULL THEN NOW() ELSE consent_updated_at END,
           updated_at = NOW()
         WHERE user_id = $9
@@ -117,7 +117,7 @@ router.put('/', authMiddleware, async (req, res) => {
           user_id, preferred_categories, preferred_brands, preferred_locations,
           budget_preferences, notification_settings, travel_preferences,
           privacy_settings, consent_version, consent_updated_at
-        ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, CASE WHEN $9 IS NOT NULL THEN NOW() ELSE NULL END)
+        ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9::varchar, CASE WHEN $9 IS NOT NULL THEN NOW() ELSE NULL END)
         RETURNING 
           preferred_categories AS "preferredCategories",
           preferred_brands AS "preferredBrands",

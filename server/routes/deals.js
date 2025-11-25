@@ -203,57 +203,6 @@ router.get('/personalized', authMiddleware, async (req, res) => {
   }
 });
 
-// Get deal by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const result = await pool.query(`
-      SELECT d.*, m.business_name, m.address, m.city, m.state,
-             m.latitude, m.longitude, m.business_type, m.website
-      FROM deals d
-      JOIN merchants m ON d.merchant_id = m.id
-      WHERE d.id = $1
-    `, [id]);
-    
-    // Get source reference from source_details if available
-    const deal = result.rows[0];
-    if (deal && deal.source_details) {
-      try {
-        const sourceDetails = typeof deal.source_details === 'string' 
-          ? JSON.parse(deal.source_details) 
-          : deal.source_details;
-        deal.source_reference = deal.source_reference || sourceDetails.rawPayload?.sourceUrl || null;
-      } catch (e) {
-        // Ignore parse errors
-      }
-    }
-
-    if (result.rows.length === 0) {
-      return res
-        .status(404)
-        .json(
-          buildEnvelope({
-            data: null,
-            error: { message: 'Deal not found', code: 'NOT_FOUND' },
-          })
-        );
-    }
-
-    res.json(buildEnvelope({ data: result.rows[0], meta: { deal_id: Number(id) } }));
-  } catch (error) {
-    console.error('Get deal error:', error);
-    res
-      .status(500)
-      .json(
-        buildEnvelope({
-          data: null,
-          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
-        })
-      );
-  }
-});
-
 // Save/unsave deal
 router.post('/:id/save', authMiddleware, async (req, res) => {
   try {
@@ -313,7 +262,7 @@ router.post('/:id/save', authMiddleware, async (req, res) => {
   }
 });
 
-// Get saved deals for user
+// Get saved deals for user (must be registered before dynamic /:id route)
 router.get('/saved', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -394,6 +343,57 @@ router.get('/saved', authMiddleware, async (req, res) => {
             message: error.message || 'Internal server error', 
             code: 'INTERNAL_ERROR' 
           },
+        })
+      );
+  }
+});
+
+// Get deal by ID (defined after specific routes like /saved)
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT d.*, m.business_name, m.address, m.city, m.state,
+             m.latitude, m.longitude, m.business_type, m.website
+      FROM deals d
+      JOIN merchants m ON d.merchant_id = m.id
+      WHERE d.id = $1
+    `, [id]);
+    
+    // Get source reference from source_details if available
+    const deal = result.rows[0];
+    if (deal && deal.source_details) {
+      try {
+        const sourceDetails = typeof deal.source_details === 'string' 
+          ? JSON.parse(deal.source_details) 
+          : deal.source_details;
+        deal.source_reference = deal.source_reference || sourceDetails.rawPayload?.sourceUrl || null;
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json(
+          buildEnvelope({
+            data: null,
+            error: { message: 'Deal not found', code: 'NOT_FOUND' },
+          })
+        );
+    }
+
+    res.json(buildEnvelope({ data: result.rows[0], meta: { deal_id: Number(id) } }));
+  } catch (error) {
+    console.error('Get deal error:', error);
+    res
+      .status(500)
+      .json(
+        buildEnvelope({
+          data: null,
+          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
         })
       );
   }
