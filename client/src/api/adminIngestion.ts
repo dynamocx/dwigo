@@ -67,4 +67,11 @@ export const seedIngestionJob = () =>
     buildConfig()
   );
 
+export const seedMidMichiganDeals = () =>
+  dwigo.post<never, { message: string; dealCount: number; jobId: string; stats: unknown }>(
+    '/admin/ingestion/seed-mid-michigan',
+    undefined,
+    buildConfig()
+  );
+
 

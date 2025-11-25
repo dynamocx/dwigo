@@ -24,6 +24,7 @@ import {
   promoteIngestionRows,
   rejectIngestionRows,
   seedIngestionJob,
+  seedMidMichiganDeals,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
@@ -113,6 +114,16 @@ const IngestionReviewPage = () => {
     },
   });
 
+  const seedMidMichiganMutation = useMutation({
+    mutationFn: () => seedMidMichiganDeals(),
+    onSuccess: () => {
+      // Wait a moment for the job to process, then refresh
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+      }, 2000);
+    },
+  });
+
   const rows: IngestedDealRow[] = pendingQuery.data?.data ?? [];
 
   return (
@@ -144,18 +155,41 @@ const IngestionReviewPage = () => {
         <Alert 
           severity="info"
           action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => seedMutation.mutate()}
-              disabled={seedMutation.isLoading}
-            >
-              {seedMutation.isLoading ? 'Seeding...' : 'Seed Test Deals'}
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => seedMidMichiganMutation.mutate()}
+                disabled={seedMidMichiganMutation.isLoading}
+              >
+                {seedMidMichiganMutation.isLoading ? 'Seeding...' : 'Seed Mid-Michigan'}
+              </Button>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => seedMutation.mutate()}
+                disabled={seedMutation.isLoading}
+              >
+                {seedMutation.isLoading ? 'Seeding...' : 'Seed Test Deals'}
+              </Button>
+            </Stack>
           }
         >
-          No pending ingestion rows. Click "Seed Test Deals" to create sample deals for testing.
+          No pending ingestion rows. Seed deals to get started.
         </Alert>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => seedMidMichiganMutation.mutate()}
+            disabled={seedMidMichiganMutation.isLoading}
+          >
+            {seedMidMichiganMutation.isLoading ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
+          </Button>
+        </Stack>
       ) : null}
 
       <Grid container spacing={2}>
