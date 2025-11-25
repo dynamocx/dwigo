@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Box, Skeleton, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/auth/AuthContext';
-import { fetchSavedDeals } from '@/api/deals';
+import { fetchSavedDeals, toggleDealSaved } from '@/api/deals';
 import ErrorState from '@/components/common/ErrorState';
 import DealCard from '@/features/deals/components/DealCard';
 import type { Deal } from '@/types/deal';
@@ -11,6 +11,7 @@ import type { Deal } from '@/types/deal';
 const DealBasketPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const savedDealsQuery = useQuery({
     queryKey: ['saved-deals'],
@@ -18,8 +19,17 @@ const DealBasketPage = () => {
     enabled: Boolean(user),
   });
 
+  const saveMutation = useMutation({
+    mutationFn: (deal: Deal) => toggleDealSaved(deal.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['saved-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['personalised-deals'] });
+    },
+  });
+
   const handleToggleSave = (deal: Deal) => {
-    // This will be handled by the DealCard component
+    saveMutation.mutate(deal);
   };
 
   const handleShare = (deal: Deal) => {
