@@ -38,13 +38,19 @@ router.get('/', async (req, res) => {
     if (location) {
       const [lat, lng] = location.split(',').map(Number);
       if (!isNaN(lat) && !isNaN(lng)) {
-        paramCount++;
-        query += ` AND ST_DWithin(
-          ST_Point(m.longitude, m.latitude)::geography,
-          ST_Point($${paramCount + 1}, $${paramCount})::geography,
-          $${paramCount + 2}
-        )`;
-        params.push(lng, lat, radius * 1000); // Convert km to meters
+        paramCount += 3;
+        // Use Haversine formula for distance calculation (works without PostGIS)
+        // Distance in kilometers: 6371 * acos(cos(radians(lat1)) * cos(radians(lat2)) * cos(radians(lng2) - radians(lng1)) + sin(radians(lat1)) * sin(radians(lat2)))
+        query += ` AND (
+          6371 * acos(
+            cos(radians($${paramCount - 2})) * 
+            cos(radians(m.latitude)) * 
+            cos(radians(m.longitude) - radians($${paramCount - 1})) + 
+            sin(radians($${paramCount - 2})) * 
+            sin(radians(m.latitude))
+          )
+        ) <= $${paramCount}`;
+        params.push(lat, lng, radius); // radius in km
       }
     }
 
@@ -183,12 +189,18 @@ router.get('/personalized', authMiddleware, async (req, res) => {
 
     if (locationLat !== null && locationLng !== null) {
       paramCount += 3;
-      query += ` AND ST_DWithin(
-        ST_Point(m.longitude, m.latitude)::geography,
-        ST_Point($${paramCount - 1}, $${paramCount - 2})::geography,
-        $${paramCount}
-      )`;
-      params.push(locationLng, locationLat, locationRadius);
+      // Use Haversine formula for distance calculation (works without PostGIS)
+      // Distance in kilometers: 6371 * acos(cos(radians(lat1)) * cos(radians(lat2)) * cos(radians(lng2) - radians(lng1)) + sin(radians(lat1)) * sin(radians(lat2)))
+      query += ` AND (
+        6371 * acos(
+          cos(radians($${paramCount - 2})) * 
+          cos(radians(m.latitude)) * 
+          cos(radians(m.longitude) - radians($${paramCount - 1})) + 
+          sin(radians($${paramCount - 2})) * 
+          sin(radians(m.latitude))
+        )
+      ) <= $${paramCount}`;
+      params.push(locationLat, locationLng, locationRadius / 1000); // Convert meters to km for comparison
       meta.filters.location = {
         latitude: locationLat,
         longitude: locationLng,

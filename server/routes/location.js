@@ -31,25 +31,32 @@ router.post('/update', authMiddleware, async (req, res) => {
       [latitude, longitude, req.user.userId]
     );
     
-    // Check for nearby deals
+    // Check for nearby deals (using Haversine formula, works without PostGIS)
     const nearbyDeals = await pool.query(`
       SELECT d.*, m.business_name, m.address, m.city, m.state,
-             ST_Distance(
-               ST_Point(m.longitude, m.latitude)::geography,
-               ST_Point($1, $2)::geography
-             ) as distance_meters
+             (6371 * acos(
+               cos(radians($1)) * 
+               cos(radians(m.latitude)) * 
+               cos(radians(m.longitude) - radians($2)) + 
+               sin(radians($1)) * 
+               sin(radians(m.latitude))
+             )) * 1000 as distance_meters
       FROM deals d
       JOIN merchants m ON d.merchant_id = m.id
       WHERE d.is_active = true 
         AND d.end_date > NOW()
-        AND ST_DWithin(
-          ST_Point(m.longitude, m.latitude)::geography,
-          ST_Point($1, $2)::geography,
-          5000
-        )
+        AND (
+          6371 * acos(
+            cos(radians($1)) * 
+            cos(radians(m.latitude)) * 
+            cos(radians(m.longitude) - radians($2)) + 
+            sin(radians($1)) * 
+            sin(radians(m.latitude))
+          )
+        ) <= 5
       ORDER BY distance_meters
       LIMIT 10
-    `, [longitude, latitude]);
+    `, [latitude, longitude]);
     
     res.json({
       message: 'Location updated successfully',
@@ -70,23 +77,31 @@ router.get('/nearby', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Latitude and longitude are required' });
     }
     
+    // Use Haversine formula for distance calculation (works without PostGIS)
     const deals = await pool.query(`
       SELECT d.*, m.business_name, m.address, m.city, m.state,
-             ST_Distance(
-               ST_Point(m.longitude, m.latitude)::geography,
-               ST_Point($1, $2)::geography
-             ) as distance_meters
+             (6371 * acos(
+               cos(radians($1)) * 
+               cos(radians(m.latitude)) * 
+               cos(radians(m.longitude) - radians($2)) + 
+               sin(radians($1)) * 
+               sin(radians(m.latitude))
+             )) * 1000 as distance_meters
       FROM deals d
       JOIN merchants m ON d.merchant_id = m.id
       WHERE d.is_active = true 
         AND d.end_date > NOW()
-        AND ST_DWithin(
-          ST_Point(m.longitude, m.latitude)::geography,
-          ST_Point($1, $2)::geography,
-          $3 * 1000
-        )
+        AND (
+          6371 * acos(
+            cos(radians($1)) * 
+            cos(radians(m.latitude)) * 
+            cos(radians(m.longitude) - radians($2)) + 
+            sin(radians($1)) * 
+            sin(radians(m.latitude))
+          )
+        ) <= $3
       ORDER BY distance_meters
-    `, [longitude, latitude, radius]);
+    `, [latitude, longitude, radius]);
     
     res.json({ deals: deals.rows });
   } catch (error) {
