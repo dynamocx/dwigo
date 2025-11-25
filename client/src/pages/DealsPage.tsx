@@ -206,7 +206,7 @@ const DealsPage = () => {
           Deals Where You Go
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Discover personalised savings around your favourite places.
+          Discover personalized savings around your favorite places.
         </Typography>
         {recommendedByFeed ? (
           <Typography variant="caption" color="text.secondary">
@@ -259,7 +259,7 @@ const DealsPage = () => {
             Sign in for smarter deals
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Create preferences to power DWIGO Agent and unlock personalised travel and shopping
+            Create preferences to power DWIGO Agent and unlock personalized travel and shopping
             recommendations.
           </Typography>
         </Box>

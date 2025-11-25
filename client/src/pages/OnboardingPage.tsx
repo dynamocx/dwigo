@@ -14,7 +14,7 @@ const OnboardingPage = () => {
   const content = useMemo(() => {
     switch (activeStep) {
       case 0:
-        return 'Add the brands, grocery stores, and neighbourhood favourites where you already spend. DWIGO will tune your feed instantly.';
+        return 'Add the brands, grocery stores, and neighbourhood favorites where you already spend. DWIGO will tune your feed instantly.';
       case 1:
         return 'Choose personas like “family adventures” or “golf weekends” so DWIGO Agent can curate experiences.';
       case 2:
@@ -36,10 +36,10 @@ const OnboardingPage = () => {
   };
 
   return (
-    <Stack spacing={3} sx={{ minHeight: '70vh' }}>
+    <Stack spacing={3} sx={{ minHeight: '70vh', px: 2.5 }}>
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
-          Let’s personalise DWIGO
+          Let's personalize DWIGO
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Answer a few quick questions so every recommendation feels made-for-you from day one.

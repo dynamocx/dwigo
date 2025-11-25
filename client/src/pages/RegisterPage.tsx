@@ -44,7 +44,7 @@ const RegisterPage = () => {
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3, px: 2.5 }}>
       <Stack spacing={2} alignItems="center">
         <Box component="img" src="/branding/DWIGO-LOGO.svg" alt="DWIGO" sx={{ height: 48 }} />
         <Typography variant="caption" color="text.secondary">
@@ -57,7 +57,7 @@ const RegisterPage = () => {
           Create your DWIGO profile
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Share a few details so DWIGO Agent can personalise deals for your household.
+          Share a few details so DWIGO Agent can personalize deals for your household.
         </Typography>
       </Box>
 

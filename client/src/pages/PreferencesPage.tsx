@@ -214,7 +214,7 @@ const PreferencesPage = () => {
   }
 
   return (
-    <Stack spacing={3}>
+    <Stack spacing={3} sx={{ px: 2.5 }}>
       <Box>
         <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>
           Your DWIGO Preferences
@@ -224,14 +224,14 @@ const PreferencesPage = () => {
         </Typography>
         {recommendedBy ? (
           <Typography variant="caption" color="text.secondary">
-            Personalisation powered by {recommendedBy}
+            Personalization powered by {recommendedBy}
           </Typography>
         ) : null}
       </Box>
 
       <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: (theme) => `1px solid ${theme.palette.divider}` }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
-          Favourite categories
+          Favorite categories
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {CATEGORY_OPTIONS.map((category) => (
@@ -315,7 +315,7 @@ const PreferencesPage = () => {
           Privacy & consent
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Control how DWIGO uses your data and location to personalise deals. You can adjust these anytime.
+          Control how DWIGO uses your data and location to personalize deals. You can adjust these anytime.
         </Typography>
         <Stack spacing={1.5}>
           <FormControlLabel
@@ -362,7 +362,7 @@ const PreferencesPage = () => {
                 }}
               />
             }
-            label="Use my activity to personalise agent recommendations"
+            label="Use my activity to personalize agent recommendations"
           />
           <FormControlLabel
             control={

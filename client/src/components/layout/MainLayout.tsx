@@ -16,6 +16,7 @@ import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined';
 import { useNavigate } from 'react-router-dom';
 import { Outlet } from 'react-router-dom';
 
@@ -145,6 +146,20 @@ const MainLayout = () => {
               sx={{ width: 48, height: 48 }}
             >
               <AutoAwesomeIcon sx={{ fontSize: 26 }} />
+            </IconButton>
+            <IconButton
+              color="primary"
+              aria-label="deal basket"
+              onClick={() => {
+                if (!user) {
+                  navigate('/register');
+                } else {
+                  navigate('/profile/deal-basket');
+                }
+              }}
+              sx={{ width: 48, height: 48 }}
+            >
+              <ShoppingCartOutlinedIcon />
             </IconButton>
             {user ? (
               <IconButton color="primary" aria-label="notifications">

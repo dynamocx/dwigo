@@ -77,6 +77,14 @@ const MobileBottomNav = () => {
           setValue(newValue);
           navigate(newValue);
         }}
+        sx={{
+          '& .MuiBottomNavigationAction-root': {
+            color: 'text.secondary',
+            '&.Mui-selected': {
+              color: 'primary.main',
+            },
+          },
+        }}
       >
         {items.map((item) => (
           <BottomNavigationAction key={item.value} value={item.value} label={item.label} icon={item.icon} />

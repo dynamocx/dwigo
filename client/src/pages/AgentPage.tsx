@@ -47,7 +47,7 @@ const AgentPage = () => {
           DWIGO Agents
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Your travel concierge that already knows your favourites, family habits, and bucket-list goals.
+          Your travel concierge that already knows your favorites, family habits, and bucket-list goals.
         </Typography>
       </Box>
 
