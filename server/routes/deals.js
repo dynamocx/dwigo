@@ -331,20 +331,13 @@ router.get('/saved', authMiddleware, async (req, res) => {
     }
     
     // Use explicit column selection to avoid conflicts
-    // Simplified query that handles both status and is_active gracefully
+    // Query that works whether status column exists or not
     const result = await pool.query(`
       SELECT 
         d.id, d.merchant_id, d.location_id, d.title, d.description,
         d.original_price, d.deal_price, d.discount_percentage,
         d.category, d.subcategory, d.start_date, d.end_date,
         d.max_redemptions, d.current_redemptions,
-        COALESCE(
-          NULLIF(d.status, ''),
-          CASE WHEN d.is_active IS NOT NULL AND d.is_active = true THEN 'active' ELSE 'archived' END,
-          'active'
-        ) as status,
-        d.visibility, d.source_type, d.source_reference, d.source_details,
-        d.confidence_score, d.last_seen_at, d.inventory_remaining,
         d.image_url, d.terms_conditions, d.created_at, d.updated_at,
         m.business_name, m.address, m.city, m.state,
         m.latitude, m.longitude, m.business_type, m.website,
@@ -354,11 +347,6 @@ router.get('/saved', authMiddleware, async (req, res) => {
       JOIN user_deal_interactions udi ON d.id = udi.deal_id
       WHERE udi.user_id = $1 
         AND udi.interaction_type = 'saved'
-        AND (
-          (d.status IS NOT NULL AND d.status = 'active')
-          OR (d.status IS NULL AND d.is_active IS NOT NULL AND d.is_active = true)
-          OR (d.status IS NULL AND d.is_active IS NULL)
-        )
         AND (d.end_date IS NULL OR d.end_date > NOW())
       ORDER BY udi.created_at DESC
     `, [userId]);
