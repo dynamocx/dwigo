@@ -215,6 +215,19 @@ router.get('/:id', async (req, res) => {
       JOIN merchants m ON d.merchant_id = m.id
       WHERE d.id = $1
     `, [id]);
+    
+    // Get source reference from source_details if available
+    const deal = result.rows[0];
+    if (deal && deal.source_details) {
+      try {
+        const sourceDetails = typeof deal.source_details === 'string' 
+          ? JSON.parse(deal.source_details) 
+          : deal.source_details;
+        deal.source_reference = deal.source_reference || sourceDetails.rawPayload?.sourceUrl || null;
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
 
     if (result.rows.length === 0) {
       return res

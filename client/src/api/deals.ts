@@ -38,6 +38,7 @@ interface DealResponse {
   confidence_score?: number | null;
   last_seen_at?: string | null;
   is_active?: boolean | null; // legacy column support
+  website?: string | null;
 }
 
 const parseCurrency = (value: string | null): number | null => {
@@ -68,6 +69,9 @@ const mapDeal = (deal: DealResponse): Deal => ({
   longitude: deal.longitude,
   isSaved: deal.is_saved,
   distanceMeters: deal.distance_meters ?? null,
+  sourceReference: deal.source_reference ?? null,
+  sourceType: deal.source_type ?? null,
+  website: deal.website ?? null,
 });
 
 const transformDealsEnvelope = (envelope: DwigoEnvelope<DealResponse[] | undefined>): DwigoEnvelope<Deal[]> => ({

@@ -20,5 +20,8 @@ export interface Deal {
   longitude: number | null;
   isSaved?: boolean;
   distanceMeters?: number | null;
+  sourceReference?: string | null;
+  sourceType?: string | null;
+  website?: string | null;
 }
 
