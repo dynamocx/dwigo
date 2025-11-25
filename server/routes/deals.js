@@ -330,11 +330,10 @@ router.get('/saved', authMiddleware, async (req, res) => {
       return res.json(buildEnvelope({ data: [], meta: { total: 0 } }));
     }
     
-    // Use explicit column selection to avoid conflicts
-    // Query that works whether status column exists or not
+    // Use explicit column selection - only select columns that definitely exist
     const result = await pool.query(`
       SELECT 
-        d.id, d.merchant_id, d.location_id, d.title, d.description,
+        d.id, d.merchant_id, d.title, d.description,
         d.original_price, d.deal_price, d.discount_percentage,
         d.category, d.subcategory, d.start_date, d.end_date,
         d.max_redemptions, d.current_redemptions,
@@ -353,21 +352,42 @@ router.get('/saved', authMiddleware, async (req, res) => {
     
     console.log(`[deals/saved] Query returned ${result.rows.length} deals`);
 
-    // Extract source_reference from source_details for each deal
-    const deals = result.rows.map((deal) => {
-      if (deal.source_details) {
+    // Fetch additional columns that might not exist for each deal
+    const deals = await Promise.all(
+      result.rows.map(async (deal) => {
         try {
-          const sourceDetails = typeof deal.source_details === 'string' 
-            ? JSON.parse(deal.source_details) 
-            : deal.source_details;
-          deal.source_reference = deal.source_reference || sourceDetails.rawPayload?.sourceUrl || null;
+          // Try to get optional columns
+          const extraQuery = await pool.query(
+            `SELECT status, visibility, source_type, source_reference, source_details,
+                    confidence_score, last_seen_at, inventory_remaining, location_id
+             FROM deals WHERE id = $1`,
+            [deal.id]
+          );
+          if (extraQuery.rows[0]) {
+            Object.assign(deal, extraQuery.rows[0]);
+          }
         } catch (e) {
-          // Ignore parse errors
+          // If columns don't exist, that's okay - just continue
+          console.warn(`[deals/saved] Could not fetch extra columns for deal ${deal.id}:`, e.message);
         }
-      }
-      return deal;
-    });
+        
+        // Extract source_reference from source_details
+        if (deal.source_details) {
+          try {
+            const sourceDetails = typeof deal.source_details === 'string' 
+              ? JSON.parse(deal.source_details) 
+              : deal.source_details;
+            deal.source_reference = deal.source_reference || sourceDetails.rawPayload?.sourceUrl || null;
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+        
+        return deal;
+      })
+    );
 
+    console.log(`[deals/saved] Returning ${deals.length} deals to client`);
     res.json(buildEnvelope({ data: deals, meta: { total: deals.length } }));
   } catch (error) {
     console.error('Get saved deals error:', error);
