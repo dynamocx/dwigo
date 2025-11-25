@@ -1,8 +1,20 @@
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import PlaceIcon from '@mui/icons-material/PlaceOutlined';
 import ShareIcon from '@mui/icons-material/ShareOutlined';
-import { Avatar, Box, Button, Card, CardActions, CardContent, Chip, IconButton, Stack, Typography } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
+  IconButton,
+  Stack,
+  Typography,
+} from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
 import type { Deal } from '@/types/deal';
@@ -11,6 +23,10 @@ interface DealCardProps {
   deal: Deal;
   onToggleSave?: (deal: Deal) => void;
   onShare?: (deal: Deal) => void;
+  onActionClick?: (deal: Deal) => void;
+  actionLabel?: string;
+  onRemove?: (deal: Deal) => void;
+  showExpiration?: boolean;
 }
 
 const formatCurrency = (value: number | null) => {
@@ -26,11 +42,41 @@ const formatDistance = (meters?: number | null) => {
   return `${Math.round(meters)} m away`;
 };
 
-const DealCard = ({ deal, onToggleSave, onShare }: DealCardProps) => {
+const formatDate = (dateString?: string | null) => {
+  if (!dateString) return null;
+  try {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return null;
+  }
+};
+
+const DealCard = ({
+  deal,
+  onToggleSave,
+  onShare,
+  onActionClick,
+  actionLabel = 'View Deal',
+  onRemove,
+  showExpiration = false,
+}: DealCardProps) => {
   const navigate = useNavigate();
   const primaryPrice = formatCurrency(deal.dealPrice);
   const originalPrice = formatCurrency(deal.originalPrice);
   const distance = formatDistance(deal.distanceMeters);
+  const expirationLabel = showExpiration ? formatDate(deal.endDate) : null;
+
+  const handlePrimaryAction = () => {
+    if (onActionClick) {
+      onActionClick(deal);
+      return;
+    }
+    navigate(`/deals/${deal.id}`);
+  };
 
   return (
     <Card
@@ -41,7 +87,17 @@ const DealCard = ({ deal, onToggleSave, onShare }: DealCardProps) => {
         background: '#ffffff',
       }}
     >
-      <CardContent sx={{ pb: 1 }}>
+      <CardContent sx={{ pb: 1, position: 'relative' }}>
+        {onRemove ? (
+          <IconButton
+            size="small"
+            sx={{ position: 'absolute', top: 8, right: 8 }}
+            aria-label="Remove from basket"
+            onClick={() => onRemove(deal)}
+          >
+            <DeleteOutlineIcon />
+          </IconButton>
+        ) : null}
         <Stack direction="row" spacing={2} alignItems="flex-start">
           <Avatar
             variant="rounded"
@@ -103,6 +159,11 @@ const DealCard = ({ deal, onToggleSave, onShare }: DealCardProps) => {
             {distance}
           </Typography>
         ) : null}
+        {expirationLabel ? (
+          <Typography variant="caption" color="error.main" display="block" mt={0.5}>
+            Expires {expirationLabel}
+          </Typography>
+        ) : null}
       </CardContent>
 
       <CardActions sx={{ px: 2, pb: 2, pt: 0, justifyContent: 'space-between' }}>
@@ -121,9 +182,9 @@ const DealCard = ({ deal, onToggleSave, onShare }: DealCardProps) => {
         <Button
           variant="contained"
           size="medium"
-          onClick={() => navigate(`/deals/${deal.id}`)}
+          onClick={handlePrimaryAction}
         >
-          View Deal
+          {actionLabel}
         </Button>
       </CardActions>
     </Card>

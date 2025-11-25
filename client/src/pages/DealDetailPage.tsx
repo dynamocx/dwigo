@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -9,10 +10,11 @@ import {
   Chip,
   Divider,
   IconButton,
+  Link,
+  Skeleton,
+  Snackbar,
   Stack,
   Typography,
-  Skeleton,
-  Link,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
@@ -77,12 +79,19 @@ const DealDetailPage = () => {
     enabled: Boolean(dealId),
   });
 
+  const [showSavedSnackbar, setShowSavedSnackbar] = useState(false);
+
   const saveMutation = useMutation({
     mutationFn: (deal: Deal) => toggleDealSaved(deal.id),
-    onSuccess: () => {
+    onSuccess: (_, previousDeal) => {
       queryClient.invalidateQueries({ queryKey: ['deal', dealId] });
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['personalised-deals'] });
+      queryClient.invalidateQueries({ queryKey: ['saved-deals'] });
+
+      if (!previousDeal.isSaved) {
+        setShowSavedSnackbar(true);
+      }
     },
   });
 
@@ -124,7 +133,7 @@ const DealDetailPage = () => {
     }
   };
 
-  const handleGetDeal = async (deal: Deal) => {
+  const handlePrimaryDealAction = async (deal: Deal) => {
     if (!user) {
       // Not logged in - prompt to sign up, pass dealId to save after registration
       navigate('/register', { state: { dealId: deal.id, redirectTo: `/deals/${deal.id}` } });
@@ -193,9 +202,8 @@ const DealDetailPage = () => {
         </Typography>
         <IconButton
           color={deal.isSaved ? 'error' : 'default'}
-          onClick={() => saveMutation.mutate(deal)}
-          aria-label={deal.isSaved ? 'Remove from favourites' : 'Save deal'}
-          disabled={!user}
+          onClick={() => handlePrimaryDealAction(deal)}
+          aria-label={deal.isSaved ? 'View in Deal Basket' : 'Save deal'}
         >
           {deal.isSaved ? <FavoriteIcon /> : <FavoriteBorderIcon />}
         </IconButton>
@@ -390,7 +398,8 @@ const DealDetailPage = () => {
           size="large"
           fullWidth
           sx={{ py: 1.5 }}
-          onClick={() => handleGetDeal(deal)}
+          onClick={() => handlePrimaryDealAction(deal)}
+          disabled={saveMutation.isPending}
         >
           {!user
             ? 'Get This Deal'
@@ -418,6 +427,25 @@ const DealDetailPage = () => {
           </Typography>
         )}
       </Stack>
+      <Snackbar
+        open={showSavedSnackbar}
+        autoHideDuration={5000}
+        onClose={() => setShowSavedSnackbar(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => setShowSavedSnackbar(false)}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/profile/deal-basket')}>
+              View Basket
+            </Button>
+          }
+          sx={{ alignItems: 'center' }}
+        >
+          Deal saved to your basket.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

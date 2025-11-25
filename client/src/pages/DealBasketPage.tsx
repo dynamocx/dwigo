@@ -3,18 +3,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Button,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
   Skeleton,
   Stack,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import LocalPrintshopIcon from '@mui/icons-material/LocalPrintshop';
+import TextsmsIcon from '@mui/icons-material/Textsms';
+import WalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import LinkIcon from '@mui/icons-material/Link';
 import { useNavigate } from 'react-router-dom';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import DirectionsIcon from '@mui/icons-material/Directions';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 
 import { useAuth } from '@/auth/AuthContext';
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
@@ -28,8 +34,8 @@ const DealBasketPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { trackEvent } = useAnalytics();
-  const [redeemMenuAnchor, setRedeemMenuAnchor] = useState<null | HTMLElement>(null);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [isRedemptionModalOpen, setIsRedemptionModalOpen] = useState(false);
 
   const savedDealsQuery = useQuery({
     queryKey: ['saved-deals'],
@@ -64,17 +70,33 @@ const DealBasketPage = () => {
     }
   };
 
-  const handleRedeem = (event: React.MouseEvent<HTMLElement>, deal: Deal) => {
+  const openRedemptionModal = (deal: Deal) => {
     setSelectedDeal(deal);
-    setRedeemMenuAnchor(event.currentTarget);
+    setIsRedemptionModalOpen(true);
   };
 
-  const handleCloseRedeemMenu = () => {
-    setRedeemMenuAnchor(null);
+  const closeRedemptionModal = () => {
+    setIsRedemptionModalOpen(false);
     setSelectedDeal(null);
   };
 
-  const handleGoToSource = (deal: Deal) => {
+  const handleRemoveDeal = (deal: Deal) => {
+    handleToggleSave(deal);
+  };
+
+  const handlePrintSticker = () => {
+    window.print();
+  };
+
+  const handleSendText = () => {
+    window.alert('SMS delivery coming soon!');
+  };
+
+  const handleSaveWallet = () => {
+    window.alert('Wallet save coming soon!');
+  };
+
+  const handleOpenLink = (deal: Deal) => {
     const url = deal.sourceReference || deal.website;
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -85,35 +107,13 @@ const DealBasketPage = () => {
         source: 'deal-basket',
       }).catch(console.error);
     }
-    handleCloseRedeemMenu();
   };
 
-  const handleGetDirections = (deal: Deal) => {
+  const handleGetDirectionsInline = (deal: Deal) => {
     if (deal.latitude && deal.longitude) {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${deal.latitude},${deal.longitude}`;
       window.open(url, '_blank', 'noopener,noreferrer');
-      trackEvent({
-        eventType: 'deal_directions_clicked',
-        entityType: 'deal',
-        entityId: deal.id,
-        source: 'deal-basket',
-      }).catch(console.error);
     }
-    handleCloseRedeemMenu();
-  };
-
-  const handlePurchase = (deal: Deal) => {
-    const url = deal.sourceReference || deal.website;
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      trackEvent({
-        eventType: 'deal_purchase_clicked',
-        entityType: 'deal',
-        entityId: deal.id,
-        source: 'deal-basket',
-      }).catch(console.error);
-    }
-    handleCloseRedeemMenu();
   };
 
   if (!user) {
@@ -179,60 +179,155 @@ const DealBasketPage = () => {
                 deal={deal}
                 onToggleSave={handleToggleSave}
                 onShare={handleShare}
+                onActionClick={openRedemptionModal}
+                actionLabel="View & Redeem"
+                onRemove={handleRemoveDeal}
+                showExpiration
               />
-              <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                <Button
-                  variant="contained"
-                  size="medium"
-                  onClick={(e) => handleRedeem(e, deal)}
-                >
-                  Redeem Deal
-                </Button>
-              </Box>
             </Box>
           ))}
         </Stack>
       )}
 
-      {/* Redemption Options Menu */}
-      <Menu
-        anchorEl={redeemMenuAnchor}
-        open={Boolean(redeemMenuAnchor) && Boolean(selectedDeal)}
-        onClose={handleCloseRedeemMenu}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
+      <Dialog
+        open={isRedemptionModalOpen && Boolean(selectedDeal)}
+        onClose={closeRedemptionModal}
+        fullWidth
+        maxWidth="md"
       >
-        {selectedDeal && (selectedDeal.sourceReference || selectedDeal.website) && (
-          <MenuItem onClick={() => handleGoToSource(selectedDeal)}>
-            <ListItemIcon>
-              <OpenInNewIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Go to Source Web Page</ListItemText>
-          </MenuItem>
-        )}
-        {selectedDeal && selectedDeal.latitude && selectedDeal.longitude && (
-          <MenuItem onClick={() => handleGetDirections(selectedDeal)}>
-            <ListItemIcon>
-              <DirectionsIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Get Directions</ListItemText>
-          </MenuItem>
-        )}
-        {selectedDeal && (selectedDeal.sourceReference || selectedDeal.website) && (
-          <MenuItem onClick={() => handlePurchase(selectedDeal)}>
-            <ListItemIcon>
-              <ShoppingCartIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Go to Purchase Destination</ListItemText>
-          </MenuItem>
-        )}
-      </Menu>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 6 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {selectedDeal?.title}
+            </Typography>
+            {selectedDeal?.discountPercentage ? (
+              <Chip
+                label={`${Math.round(selectedDeal.discountPercentage)}% OFF`}
+                color="secondary"
+                size="small"
+                sx={{ mt: 1 }}
+              />
+            ) : null}
+          </Box>
+          <IconButton
+            onClick={closeRedemptionModal}
+            sx={{ ml: 'auto' }}
+            aria-label="Close redemption modal"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={4}>
+            {/* Deal Sticker */}
+            <Box
+              sx={{
+                border: '2px dashed',
+                borderColor: 'primary.main',
+                borderRadius: 2,
+                p: 3,
+                bgcolor: 'primary.light',
+              }}
+            >
+              <Typography variant="subtitle2" color="primary.dark" gutterBottom>
+                Deal Sticker
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                {selectedDeal?.title}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-line' }}>
+                {selectedDeal?.description}
+              </Typography>
+              <Stack direction="row" spacing={2} mt={2}>
+                <Button
+                  variant="contained"
+                  startIcon={<LocalPrintshopIcon />}
+                  onClick={handlePrintSticker}
+                >
+                  Print
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<TextsmsIcon />}
+                  onClick={handleSendText}
+                >
+                  Send to Text
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<WalletIcon />}
+                  onClick={handleSaveWallet}
+                >
+                  Save to Wallet
+                </Button>
+              </Stack>
+            </Box>
+
+            {/* Deal Location */}
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+                Deal Location
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Stack spacing={1}>
+                <Typography variant="subtitle1">{selectedDeal?.businessName}</Typography>
+                {selectedDeal?.address ? (
+                  <Typography variant="body2">{selectedDeal.address}</Typography>
+                ) : null}
+                {(selectedDeal?.city || selectedDeal?.state) && (
+                  <Typography variant="body2" color="text.secondary">
+                    {[selectedDeal?.city, selectedDeal?.state].filter(Boolean).join(', ')}
+                  </Typography>
+                )}
+                {selectedDeal?.latitude && selectedDeal?.longitude ? (
+                  <Button
+                    startIcon={<LocationOnIcon />}
+                    variant="outlined"
+                    sx={{ alignSelf: 'flex-start', mt: 1 }}
+                    onClick={() => selectedDeal && handleGetDirectionsInline(selectedDeal)}
+                  >
+                    Get Directions
+                  </Button>
+                ) : null}
+                {selectedDeal?.website ? (
+                  <Button
+                    startIcon={<LinkIcon />}
+                    variant="text"
+                    sx={{ alignSelf: 'flex-start' }}
+                    onClick={() => selectedDeal && handleOpenLink(selectedDeal)}
+                  >
+                    Visit Website
+                  </Button>
+                ) : null}
+              </Stack>
+            </Box>
+
+            {/* Deal Direct */}
+            {(selectedDeal?.sourceReference || selectedDeal?.website) && (
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
+                  Deal Direct
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Not all redemption links are in our control and may not always work. If this link
+                  does not work, please try the Deal Sticker or Location options above to redeem
+                  your deal.
+                </Typography>
+                <Button
+                  variant="contained"
+                  onClick={() => selectedDeal && handleOpenLink(selectedDeal)}
+                >
+                  Open Redemption Link
+                </Button>
+              </Box>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRedemptionModal}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 };
