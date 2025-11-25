@@ -350,10 +350,13 @@ const PreferencesPage = () => {
         <Button
           variant="contained"
           size="large"
-          onClick={() => updateMutation.mutate()}
+          onClick={() => {
+            setHasUserMadeChanges(true); // Ensure changes flag is set
+            updateMutation.mutate();
+          }}
           disabled={updateMutation.isPending}
         >
-          {updateMutation.isPending ? 'Saving…' : 'Save preferences'}
+          {updateMutation.isPending ? 'Saving…' : updateMutation.isSuccess ? 'Saved ✓' : 'Save preferences'}
         </Button>
         <Button
           variant="outlined"
@@ -368,6 +371,18 @@ const PreferencesPage = () => {
           Quick add venue
         </Button>
       </Stack>
+      
+      {updateMutation.isSuccess && !dealId && (
+        <Typography variant="caption" color="success.main" sx={{ display: 'block', textAlign: 'center' }}>
+          Preferences saved successfully
+        </Typography>
+      )}
+      
+      {updateMutation.isError && (
+        <Typography variant="caption" color="error.main" sx={{ display: 'block', textAlign: 'center' }}>
+          Failed to save preferences. Please try again.
+        </Typography>
+      )}
     </Stack>
   );
 };
