@@ -318,11 +318,19 @@ router.get('/saved', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     
+    // Use explicit column selection to avoid conflicts
     const result = await pool.query(`
-      SELECT d.*,
-             m.business_name, m.address, m.city, m.state,
-             m.latitude, m.longitude, m.business_type, m.website,
-             true as is_saved
+      SELECT 
+        d.id, d.merchant_id, d.location_id, d.title, d.description,
+        d.original_price, d.deal_price, d.discount_percentage,
+        d.category, d.subcategory, d.start_date, d.end_date,
+        d.max_redemptions, d.current_redemptions, d.status,
+        d.visibility, d.source_type, d.source_reference, d.source_details,
+        d.confidence_score, d.last_seen_at, d.inventory_remaining,
+        d.image_url, d.terms_conditions, d.created_at, d.updated_at,
+        m.business_name, m.address, m.city, m.state,
+        m.latitude, m.longitude, m.business_type, m.website,
+        true as is_saved
       FROM deals d
       JOIN merchants m ON d.merchant_id = m.id
       JOIN user_deal_interactions udi ON d.id = udi.deal_id

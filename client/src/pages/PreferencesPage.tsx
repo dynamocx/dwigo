@@ -100,8 +100,11 @@ const PreferencesPage = () => {
         consentVersion: CONSENT_VERSION,
       }),
     onSuccess: async (response) => {
+      console.log('[Preferences] Save successful:', response);
       const updated = response.data;
-      setConsentUpdatedAt(updated?.consentUpdatedAt ?? new Date().toISOString());
+      if (updated) {
+        setConsentUpdatedAt(updated.consentUpdatedAt ?? new Date().toISOString());
+      }
       setHasUserMadeChanges(false); // Reset after successful save
       void preferencesQuery.refetch();
       
@@ -126,6 +129,10 @@ const PreferencesPage = () => {
         }
       }
     },
+    onError: (error) => {
+      console.error('[Preferences] Save failed:', error);
+      setHasUserMadeChanges(true); // Keep the flag so user can retry
+    },
   });
 
   // Auto-save preferences when user makes changes (debounced)
@@ -142,12 +149,14 @@ const PreferencesPage = () => {
     const timeoutId = setTimeout(() => {
       // Only auto-save if user is logged in
       if (user) {
+        console.log('[Preferences] Auto-saving preferences...');
         updateMutation.mutate();
       }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user, hasLoadedInitialData, hasUserMadeChanges, updateMutation, preferencesQuery.isLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user, hasLoadedInitialData, hasUserMadeChanges]);
 
   const handleToggle = (value: string, current: string[], setter: (next: string[]) => void) => {
     setter(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
