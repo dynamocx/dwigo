@@ -30,7 +30,7 @@ services:
       - key: JOB_WORKER_CONCURRENCY
         value: 3
       - key: CORS_ORIGIN
-        value: "https://dwigo.vercel.app,http://localhost:5173"
+        value: "https://dwigo.vercel.app,https://dwigo-git-main-dynamocx.vercel.app,http://localhost:5173"
 
   # Note: Background Worker not available on free plan
   # Create manually: "New +" → "Background Worker" after deployment
