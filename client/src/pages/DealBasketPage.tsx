@@ -220,24 +220,27 @@ const DealBasketPage = () => {
         <DialogContent dividers>
           <Stack spacing={4}>
             {/* Deal Sticker */}
-            <Box
-              sx={{
-                border: '2px dashed',
-                borderColor: 'primary.main',
-                borderRadius: 2,
-                p: 3,
-                bgcolor: 'primary.light',
-              }}
-            >
-              <Typography variant="subtitle2" color="primary.dark" gutterBottom>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
                 Deal Sticker
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>
-                {selectedDeal?.title}
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-line' }}>
-                {selectedDeal?.description}
-              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Box
+                sx={{
+                  border: '2px dashed',
+                  borderColor: 'primary.main',
+                  borderRadius: 2,
+                  p: 3,
+                  bgcolor: (theme) => theme.palette.primary.light + '40', // Lighter blue with opacity
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {selectedDeal?.title}
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-line' }}>
+                  {selectedDeal?.description}
+                </Typography>
+              </Box>
               <Stack direction="row" spacing={2} mt={2}>
                 <Button
                   variant="contained"
