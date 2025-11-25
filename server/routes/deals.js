@@ -331,29 +331,51 @@ router.get('/saved', authMiddleware, async (req, res) => {
     }
     
     // Use explicit column selection to avoid conflicts
-    // Handle both status column and legacy is_active column
-    const result = await pool.query(`
-      SELECT 
-        d.id, d.merchant_id, d.location_id, d.title, d.description,
-        d.original_price, d.deal_price, d.discount_percentage,
-        d.category, d.subcategory, d.start_date, d.end_date,
-        d.max_redemptions, d.current_redemptions,
-        COALESCE(d.status, CASE WHEN d.is_active = true THEN 'active' ELSE 'archived' END) as status,
-        d.visibility, d.source_type, d.source_reference, d.source_details,
-        d.confidence_score, d.last_seen_at, d.inventory_remaining,
-        d.image_url, d.terms_conditions, d.created_at, d.updated_at,
-        m.business_name, m.address, m.city, m.state,
-        m.latitude, m.longitude, m.business_type, m.website,
-        true as is_saved
-      FROM deals d
-      JOIN merchants m ON d.merchant_id = m.id
-      JOIN user_deal_interactions udi ON d.id = udi.deal_id
-      WHERE udi.user_id = $1 
-        AND udi.interaction_type = 'saved'
-        AND (COALESCE(d.status, CASE WHEN d.is_active = true THEN 'active' ELSE 'archived' END) = 'active')
-        AND (d.end_date IS NULL OR d.end_date > NOW())
-      ORDER BY udi.created_at DESC
-    `, [userId]);
+    // Try to get column info first to see what exists
+    try {
+      const columnCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'deals' AND column_name IN ('status', 'is_active')
+      `);
+      const hasStatus = columnCheck.rows.some(r => r.column_name === 'status');
+      const hasIsActive = columnCheck.rows.some(r => r.column_name === 'is_active');
+      console.log(`[deals/saved] Column check - status: ${hasStatus}, is_active: ${hasIsActive}`);
+      
+      // Build status condition based on what columns exist
+      let statusCondition = '';
+      if (hasStatus) {
+        statusCondition = "d.status = 'active'";
+      } else if (hasIsActive) {
+        statusCondition = 'd.is_active = true';
+      } else {
+        // No status column at all - just return all saved deals
+        statusCondition = '1=1';
+      }
+      
+      const result = await pool.query(`
+        SELECT 
+          d.id, d.merchant_id, d.location_id, d.title, d.description,
+          d.original_price, d.deal_price, d.discount_percentage,
+          d.category, d.subcategory, d.start_date, d.end_date,
+          d.max_redemptions, d.current_redemptions,
+          ${hasStatus ? "COALESCE(d.status, 'active')" : hasIsActive ? "CASE WHEN d.is_active THEN 'active' ELSE 'archived' END" : "'active'"} as status,
+          ${hasStatus ? 'd.visibility,' : ''}
+          d.source_type, d.source_reference, d.source_details,
+          d.confidence_score, d.last_seen_at, d.inventory_remaining,
+          d.image_url, d.terms_conditions, d.created_at, d.updated_at,
+          m.business_name, m.address, m.city, m.state,
+          m.latitude, m.longitude, m.business_type, m.website,
+          true as is_saved
+        FROM deals d
+        JOIN merchants m ON d.merchant_id = m.id
+        JOIN user_deal_interactions udi ON d.id = udi.deal_id
+        WHERE udi.user_id = $1 
+          AND udi.interaction_type = 'saved'
+          AND ${statusCondition}
+          AND (d.end_date IS NULL OR d.end_date > NOW())
+        ORDER BY udi.created_at DESC
+      `, [userId]);
     
     console.log(`[deals/saved] Query returned ${result.rows.length} deals`);
 
