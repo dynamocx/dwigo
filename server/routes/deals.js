@@ -319,7 +319,8 @@ router.get('/saved', authMiddleware, async (req, res) => {
     const userId = req.user.userId;
     
     const result = await pool.query(`
-      SELECT d.*, m.business_name, m.address, m.city, m.state,
+      SELECT d.*, d.source_details, d.source_reference, d.source_type,
+             m.business_name, m.address, m.city, m.state,
              m.latitude, m.longitude, m.business_type, m.website,
              true as is_saved
       FROM deals d

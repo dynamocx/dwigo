@@ -135,6 +135,9 @@ const PreferencesPage = () => {
     
     // Don't auto-save if preferences are loading
     if (preferencesQuery.isLoading) return;
+    
+    // Don't auto-save if mutation is already in progress
+    if (updateMutation.isPending) return;
 
     const timeoutId = setTimeout(() => {
       // Only auto-save if user is logged in
@@ -144,7 +147,7 @@ const PreferencesPage = () => {
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user, hasLoadedInitialData, hasUserMadeChanges]);
+  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user, hasLoadedInitialData, hasUserMadeChanges, updateMutation, preferencesQuery.isLoading]);
 
   const handleToggle = (value: string, current: string[], setter: (next: string[]) => void) => {
     setter(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
