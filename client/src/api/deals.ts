@@ -108,3 +108,8 @@ export const trackDealView = async (dealId: number) => {
   await dwigo.post<undefined, { tracked: boolean }>(`/deals/${dealId}/view`);
 };
 
+export const fetchSavedDeals = async (): Promise<DwigoEnvelope<Deal[]>> => {
+  const envelope = await dwigo.get<DealResponse[]>('/deals/saved');
+  return transformDealsEnvelope(envelope);
+};
+

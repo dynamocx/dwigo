@@ -4,6 +4,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 dayjs.extend(relativeTime);
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -34,6 +35,10 @@ interface PrivacySettingsState {
 
 const PreferencesPage = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const dealId = (location.state as { dealId?: number })?.dealId;
+  const redirectTo = (location.state as { redirectTo?: string })?.redirectTo;
   const [categories, setCategories] = useState<string[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [preferredCities, setPreferredCities] = useState<string[]>([]);
@@ -94,11 +99,32 @@ const PreferencesPage = () => {
         },
         consentVersion: CONSENT_VERSION,
       }),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       const updated = response.data;
       setConsentUpdatedAt(updated?.consentUpdatedAt ?? new Date().toISOString());
       setHasUserMadeChanges(false); // Reset after successful save
       void preferencesQuery.refetch();
+      
+      // If we have a dealId from registration flow, save the deal and redirect
+      if (dealId) {
+        try {
+          await toggleDealSaved(dealId);
+          // Redirect to the deal or the specified redirect path
+          if (redirectTo) {
+            navigate(redirectTo);
+          } else {
+            navigate(`/deals/${dealId}`);
+          }
+        } catch (error) {
+          console.error('Failed to save deal:', error);
+          // Still redirect even if save fails
+          if (redirectTo) {
+            navigate(redirectTo);
+          } else if (dealId) {
+            navigate(`/deals/${dealId}`);
+          }
+        }
+      }
     },
   });
 

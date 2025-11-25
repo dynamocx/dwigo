@@ -12,6 +12,8 @@ import LoginPage from '@/pages/LoginPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import PreferencesPage from '@/pages/PreferencesPage';
 import ProfilePage from '@/pages/ProfilePage';
+import ProfileHubPage from '@/pages/ProfileHubPage';
+import DealBasketPage from '@/pages/DealBasketPage';
 import RegisterPage from '@/pages/RegisterPage';
 import RewardsPage from '@/pages/RewardsPage';
 import IngestionReviewPage from '@/pages/admin/IngestionReviewPage';
@@ -50,6 +52,22 @@ function App() {
         />
         <Route
           path="profile"
+          element={
+            <ProtectedRoute>
+              <ProfileHubPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile/deal-basket"
+          element={
+            <ProtectedRoute>
+              <DealBasketPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile/settings"
           element={
             <ProtectedRoute>
               <ProfilePage />

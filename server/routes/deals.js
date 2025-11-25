@@ -313,6 +313,39 @@ router.post('/:id/save', authMiddleware, async (req, res) => {
   }
 });
 
+// Get saved deals for user
+router.get('/saved', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const result = await pool.query(`
+      SELECT d.*, m.business_name, m.address, m.city, m.state,
+             m.latitude, m.longitude, m.business_type, m.website,
+             true as is_saved
+      FROM deals d
+      JOIN merchants m ON d.merchant_id = m.id
+      JOIN user_deal_interactions udi ON d.id = udi.deal_id
+      WHERE udi.user_id = $1 
+        AND udi.interaction_type = 'saved'
+        AND d.status = 'active'
+        AND (d.end_date IS NULL OR d.end_date > NOW())
+      ORDER BY udi.created_at DESC
+    `, [userId]);
+
+    res.json(buildEnvelope({ data: result.rows, meta: { total: result.rows.length } }));
+  } catch (error) {
+    console.error('Get saved deals error:', error);
+    res
+      .status(500)
+      .json(
+        buildEnvelope({
+          data: [],
+          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+        })
+      );
+  }
+});
+
 // Track deal view
 router.post('/:id/view', authMiddleware, async (req, res) => {
   try {

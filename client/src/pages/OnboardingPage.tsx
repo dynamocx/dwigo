@@ -1,11 +1,14 @@
 import { Box, Button, Paper, Stack, Step, StepLabel, Stepper, Typography } from '@mui/material';
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const steps = ['Tell DWIGO your go-to places', 'Set travel personas', 'Enable smart notifications'];
 
 const OnboardingPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const dealId = (location.state as { dealId?: number })?.dealId;
+  const redirectTo = (location.state as { redirectTo?: string })?.redirectTo;
   const [activeStep, setActiveStep] = useState(0);
 
   const content = useMemo(() => {
@@ -23,7 +26,10 @@ const OnboardingPage = () => {
 
   const handleNext = () => {
     if (activeStep === steps.length - 1) {
-      navigate('/preferences', { replace: true });
+      navigate('/preferences', { 
+        replace: true,
+        state: { dealId, redirectTo }
+      });
       return;
     }
     setActiveStep((step) => step + 1);

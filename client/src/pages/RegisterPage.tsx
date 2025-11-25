@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Alert, Box, Button, Link, Stack, TextField, Typography } from '@mui/material';
 
 import { useAuth } from '@/auth/AuthContext';
@@ -7,6 +7,9 @@ import { useAuth } from '@/auth/AuthContext';
 const RegisterPage = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const dealId = (location.state as { dealId?: number })?.dealId;
+  const redirectTo = (location.state as { redirectTo?: string })?.redirectTo;
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -28,7 +31,10 @@ const RegisterPage = () => {
 
     try {
       await register({ ...form });
-      navigate('/onboarding', { replace: true });
+      navigate('/onboarding', { 
+        replace: true,
+        state: { dealId, redirectTo }
+      });
     } catch (err: unknown) {
       setError('Something went wrong creating your account. Please try again.');
       console.error(err);

@@ -134,8 +134,8 @@ const DealDetailPage = () => {
 
   const handleGetDeal = async (deal: Deal) => {
     if (!user) {
-      // Not logged in - prompt to sign up
-      navigate('/register', { state: { redirectTo: `/deals/${deal.id}` } });
+      // Not logged in - prompt to sign up, pass dealId to save after registration
+      navigate('/register', { state: { dealId: deal.id, redirectTo: `/deals/${deal.id}` } });
       return;
     }
 

@@ -38,6 +38,16 @@ const MobileBottomNav = () => {
   );
 
   useEffect(() => {
+    // Highlight Profile during onboarding/preferences/register flow
+    const isOnboardingFlow = ['/onboarding', '/preferences', '/register'].some((path) =>
+      location.pathname.startsWith(path)
+    );
+    
+    if (isOnboardingFlow) {
+      setValue('/profile');
+      return;
+    }
+    
     const activeItem = items.find((item) => location.pathname.startsWith(item.value));
     if (activeItem) {
       setValue(activeItem.value);
