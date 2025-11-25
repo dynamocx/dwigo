@@ -13,10 +13,6 @@ import {
   Typography,
   Skeleton,
   Link,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
@@ -26,9 +22,6 @@ import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import BusinessIcon from '@mui/icons-material/Business';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import DirectionsIcon from '@mui/icons-material/Directions';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
 import { useAuth } from '@/auth/AuthContext';
@@ -75,7 +68,6 @@ const DealDetailPage = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { trackEvent } = useAnalytics();
-  const [savedDealMenuAnchor, setSavedDealMenuAnchor] = useState<null | HTMLElement>(null);
 
   const dealId = id ? Number(id) : null;
 
@@ -140,71 +132,15 @@ const DealDetailPage = () => {
     }
 
     if (!deal.isSaved) {
-      // Not saved - save it first, then show options
+      // Not saved - just save it, no menu options
       saveMutation.mutate(deal);
-      // After saving, show the menu
-      setTimeout(() => {
-        const button = document.querySelector('[data-get-deal-button]') as HTMLElement;
-        if (button) {
-          setSavedDealMenuAnchor(button);
-        }
-      }, 100);
       return;
     }
 
-    // Already saved - show menu with options
-    const button = document.querySelector('[data-get-deal-button]') as HTMLElement;
-    if (button) {
-      setSavedDealMenuAnchor(button);
-    }
+    // Already saved - navigate to deal basket where redemption options are available
+    navigate('/profile/deal-basket');
   };
 
-  const handleCloseSavedDealMenu = () => {
-    setSavedDealMenuAnchor(null);
-  };
-
-  const handleGoToSource = (deal: Deal) => {
-    const url = deal.sourceReference || deal.website;
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      trackEvent({
-        eventType: 'deal_source_clicked',
-        entityType: 'deal',
-        entityId: deal.id,
-        source: 'app',
-      }).catch(console.error);
-    }
-    handleCloseSavedDealMenu();
-  };
-
-  const handleGetDirections = (deal: Deal) => {
-    if (deal.latitude && deal.longitude) {
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${deal.latitude},${deal.longitude}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
-      trackEvent({
-        eventType: 'deal_directions_clicked',
-        entityType: 'deal',
-        entityId: deal.id,
-        source: 'app',
-      }).catch(console.error);
-    }
-    handleCloseSavedDealMenu();
-  };
-
-  const handlePurchase = (deal: Deal) => {
-    // For now, go to source URL or merchant website
-    const url = deal.sourceReference || deal.website;
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      trackEvent({
-        eventType: 'deal_purchase_clicked',
-        entityType: 'deal',
-        entityId: deal.id,
-        source: 'app',
-      }).catch(console.error);
-    }
-    handleCloseSavedDealMenu();
-  };
 
   if (dealQuery.isLoading) {
     return (
@@ -455,13 +391,12 @@ const DealDetailPage = () => {
           fullWidth
           sx={{ py: 1.5 }}
           onClick={() => handleGetDeal(deal)}
-          data-get-deal-button
         >
           {!user
             ? 'Get This Deal'
             : !deal.isSaved
               ? 'Save to Deal Basket'
-              : 'Get This Deal'}
+              : 'View in Deal Basket'}
         </Button>
         
         {!user && (
@@ -473,45 +408,15 @@ const DealDetailPage = () => {
           </Typography>
         )}
 
-        {/* Saved Deal Options Menu */}
-        <Menu
-          anchorEl={savedDealMenuAnchor}
-          open={Boolean(savedDealMenuAnchor)}
-          onClose={handleCloseSavedDealMenu}
-          anchorOrigin={{
-            vertical: 'top',
-            horizontal: 'center',
-          }}
-          transformOrigin={{
-            vertical: 'bottom',
-            horizontal: 'center',
-          }}
-        >
-          {(deal.sourceReference || deal.website) && (
-            <MenuItem onClick={() => handleGoToSource(deal)}>
-              <ListItemIcon>
-                <OpenInNewIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Go to Source Web Page</ListItemText>
-            </MenuItem>
-          )}
-          {deal.latitude && deal.longitude && (
-            <MenuItem onClick={() => handleGetDirections(deal)}>
-              <ListItemIcon>
-                <DirectionsIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Get Directions</ListItemText>
-            </MenuItem>
-          )}
-          {(deal.sourceReference || deal.website) && (
-            <MenuItem onClick={() => handlePurchase(deal)}>
-              <ListItemIcon>
-                <ShoppingCartIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Go to Purchase Destination</ListItemText>
-            </MenuItem>
-          )}
-        </Menu>
+        {user && deal.isSaved && (
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            This deal is saved in your{' '}
+            <Link component="button" variant="body2" onClick={() => navigate('/profile/deal-basket')}>
+              Deal Basket
+            </Link>
+            . Visit your basket to redeem it.
+          </Typography>
+        )}
       </Stack>
     </Box>
   );

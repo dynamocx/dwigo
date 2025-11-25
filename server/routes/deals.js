@@ -332,7 +332,22 @@ router.get('/saved', authMiddleware, async (req, res) => {
       ORDER BY udi.created_at DESC
     `, [userId]);
 
-    res.json(buildEnvelope({ data: result.rows, meta: { total: result.rows.length } }));
+    // Extract source_reference from source_details for each deal
+    const deals = result.rows.map((deal) => {
+      if (deal.source_details) {
+        try {
+          const sourceDetails = typeof deal.source_details === 'string' 
+            ? JSON.parse(deal.source_details) 
+            : deal.source_details;
+          deal.source_reference = deal.source_reference || sourceDetails.rawPayload?.sourceUrl || null;
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+      return deal;
+    });
+
+    res.json(buildEnvelope({ data: deals, meta: { total: deals.length } }));
   } catch (error) {
     console.error('Get saved deals error:', error);
     res
