@@ -97,6 +97,24 @@ const PreferencesPage = () => {
     },
   });
 
+  // Auto-save preferences when user makes changes (debounced)
+  useEffect(() => {
+    // Don't auto-save on initial load
+    if (!preferencesQuery.data) return;
+    
+    // Don't auto-save if preferences haven't loaded yet
+    if (preferencesQuery.isLoading) return;
+
+    const timeoutId = setTimeout(() => {
+      // Only auto-save if user is logged in and has made changes
+      if (user && (categories.length > 0 || brands.length > 0 || preferredCities.length > 0)) {
+        updateMutation.mutate();
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [categories, brands, preferredCities, notificationsEnabled, emailUpdates, privacy, user]);
+
   const handleToggle = (value: string, current: string[], setter: (next: string[]) => void) => {
     setter(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
   };
