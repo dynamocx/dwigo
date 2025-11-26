@@ -74,4 +74,49 @@ export const seedMidMichiganDeals = () =>
     buildConfig()
   );
 
+export interface ManualDealEntry {
+  merchantAlias: string;
+  title: string;
+  description?: string;
+  category: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  latitude?: string;
+  longitude?: string;
+  startDate?: string;
+  endDate?: string;
+  price?: string;
+  discountPercentage?: string;
+  sourceUrl?: string;
+  confidence?: number;
+}
+
+export const submitManualDeal = (deal: ManualDealEntry) =>
+  dwigo.post<ManualDealEntry, { message: string; dealCount: number; jobId: string; stats: unknown }>(
+    '/admin/ingestion/manual-entry',
+    deal,
+    buildConfig()
+  );
+
+export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; dealCount: number; jobId: string; stats: unknown }>> => {
+  const formData = new FormData();
+  formData.append('csv', file);
+
+  return fetch(`${import.meta.env.VITE_API_URL || '/api'}/admin/ingestion/upload-csv`, {
+    method: 'POST',
+    headers: {
+      [ADMIN_HEADER]: adminToken,
+    },
+    body: formData,
+  }).then(async (res) => {
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error?.message || 'Failed to upload CSV');
+    }
+    return res.json();
+  });
+};
+
 

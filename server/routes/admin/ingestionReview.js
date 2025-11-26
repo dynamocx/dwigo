@@ -1,10 +1,13 @@
 const express = require('express');
+const multer = require('multer');
 const pool = require('../../config/database');
 const {
   promoteIngestedDealsByIds,
   rejectIngestedDealsByIds,
 } = require('../../services/dealPromotion');
 const { processIngestionJob } = require('../../services/ingestion');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -516,6 +519,275 @@ router.post('/seed', async (req, res) => {
     res.status(500).json({
       data: null,
       error: { message: 'Failed to seed ingestion job' },
+      meta: {},
+    });
+  }
+});
+
+// Configure multer for CSV uploads (memory storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'), false);
+    }
+  },
+});
+
+// Manual deal entry endpoint
+router.post('/manual-entry', async (req, res) => {
+  try {
+    const { processIngestionJob } = require('../../services/ingestion');
+    
+    const {
+      merchantAlias,
+      title,
+      description,
+      category,
+      address,
+      city,
+      state,
+      postalCode,
+      latitude,
+      longitude,
+      startDate,
+      endDate,
+      price,
+      discountPercentage,
+      sourceUrl,
+      confidence = 0.75,
+    } = req.body;
+
+    if (!merchantAlias || !title || !category) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'merchantAlias, title, and category are required' },
+        meta: {},
+      });
+    }
+
+    const rawPayload = {
+      title,
+      description,
+      category,
+      address,
+      city,
+      state,
+      postalCode,
+      latitude: latitude ? parseFloat(latitude) : undefined,
+      longitude: longitude ? parseFloat(longitude) : undefined,
+      startDate,
+      endDate,
+      sourceUrl,
+    };
+
+    if (price) {
+      rawPayload.price = parseFloat(price);
+    }
+    if (discountPercentage) {
+      rawPayload.discountPercentage = parseFloat(discountPercentage);
+    }
+
+    const normalizedPayload = {
+      title,
+      category,
+      location: {
+        city,
+        state,
+        ...(latitude && longitude ? {
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+        } : {}),
+      },
+    };
+
+    if (discountPercentage) {
+      normalizedPayload.discount = {
+        type: 'percentage',
+        value: parseFloat(discountPercentage),
+      };
+    } else if (price) {
+      normalizedPayload.price = {
+        currency: 'USD',
+        amount: parseFloat(price),
+      };
+    }
+
+    const deal = {
+      merchantAlias,
+      rawPayload,
+      normalizedPayload,
+      confidence: parseFloat(confidence),
+    };
+
+    const payload = {
+      source: 'admin-manual-entry',
+      scope: 'mid-michigan-pilot',
+      deals: [deal],
+    };
+
+    const result = await processIngestionJob(payload);
+
+    res.json({
+      data: {
+        message: 'Deal entered successfully',
+        dealCount: 1,
+        jobId: result.jobId,
+        stats: result.stats,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ingestion] manual-entry error', error);
+    res.status(500).json({
+      data: null,
+      error: { message: error.message || 'Failed to enter deal' },
+      meta: {},
+    });
+  }
+});
+
+// CSV upload endpoint
+router.post('/upload-csv', upload.single('csv'), async (req, res) => {
+  try {
+    const { processIngestionJob } = require('../../services/ingestion');
+    
+    if (!req.file) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'CSV file is required' },
+        meta: {},
+      });
+    }
+
+    const csvContent = req.file.buffer.toString('utf-8');
+    const lines = csvContent.split('\n').filter(line => line.trim());
+    
+    if (lines.length < 2) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'CSV must have at least a header row and one data row' },
+        meta: {},
+      });
+    }
+
+    const headers = lines[0].split(',').map(h => h.trim());
+    const deals = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      if (values.length !== headers.length || values.every(v => !v)) {
+        continue; // Skip empty or malformed rows
+      }
+
+      const deal = {};
+      headers.forEach((header, index) => {
+        const value = values[index];
+        if (value && value !== '') {
+          if (header === 'latitude' || header === 'longitude') {
+            deal[header] = parseFloat(value);
+          } else if (header === 'price' || header === 'discountPercentage' || header === 'confidence') {
+            deal[header] = parseFloat(value);
+          } else {
+            deal[header] = value;
+          }
+        }
+      });
+
+      if (!deal.merchantAlias || !deal.title || !deal.category) {
+        continue; // Skip rows missing required fields
+      }
+
+      const rawPayload = {
+        title: deal.title,
+        description: deal.description,
+        category: deal.category,
+        address: deal.address,
+        city: deal.city,
+        state: deal.state,
+        postalCode: deal.postalCode,
+        latitude: deal.latitude,
+        longitude: deal.longitude,
+        startDate: deal.startDate,
+        endDate: deal.endDate,
+        sourceUrl: deal.sourceUrl,
+      };
+
+      if (deal.price) {
+        rawPayload.price = deal.price;
+      }
+      if (deal.discountPercentage) {
+        rawPayload.discountPercentage = deal.discountPercentage;
+      }
+
+      const normalizedPayload = {
+        title: deal.title,
+        category: deal.category,
+        location: {
+          city: deal.city,
+          state: deal.state,
+          ...(deal.latitude && deal.longitude ? {
+            latitude: deal.latitude,
+            longitude: deal.longitude,
+          } : {}),
+        },
+      };
+
+      if (deal.discountPercentage) {
+        normalizedPayload.discount = {
+          type: 'percentage',
+          value: deal.discountPercentage,
+        };
+      } else if (deal.price) {
+        normalizedPayload.price = {
+          currency: 'USD',
+          amount: deal.price,
+        };
+      }
+
+      deals.push({
+        merchantAlias: deal.merchantAlias,
+        rawPayload,
+        normalizedPayload,
+        confidence: deal.confidence || 0.75,
+      });
+    }
+
+    if (deals.length === 0) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'No valid deals found in CSV' },
+        meta: {},
+      });
+    }
+
+    const payload = {
+      source: 'admin-csv-upload',
+      scope: 'mid-michigan-pilot',
+      deals,
+    };
+
+    const result = await processIngestionJob(payload);
+
+    res.json({
+      data: {
+        message: 'CSV imported successfully',
+        dealCount: deals.length,
+        jobId: result.jobId,
+        stats: result.stats,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ingestion] upload-csv error', error);
+    res.status(500).json({
+      data: null,
+      error: { message: error.message || 'Failed to import CSV' },
       meta: {},
     });
   }

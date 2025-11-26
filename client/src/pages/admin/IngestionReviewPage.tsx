@@ -28,6 +28,7 @@ import {
   type IngestedDealRow,
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
+import DealEntryForm from './DealEntryForm';
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) return '—';
@@ -179,6 +180,8 @@ const IngestionReviewPage = () => {
         </Alert>
       ) : null}
 
+      <DealEntryForm />
+
       {rows.length > 0 ? (
         <Stack direction="row" spacing={1} justifyContent="flex-end">
           <Button
@@ -191,6 +194,12 @@ const IngestionReviewPage = () => {
           </Button>
         </Stack>
       ) : null}
+
+      <Divider />
+
+      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+        Pending Deals ({rows.length})
+      </Typography>
 
       <Grid container spacing={2}>
         {rows.map((row) => {
