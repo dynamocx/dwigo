@@ -13,6 +13,7 @@
     "ingest:csv": "node scripts/importDealsFromCSV.js",
     "ingest:promote": "node scripts/promoteIngestedDeals.js",
     "ingest:crawl:lansing": "node scripts/crawlLansingBrewery.js",
+    "ingest:sync:eventbrite": "node scripts/syncEventbrite.js",
     "verify:deals": "node scripts/verifySampleDeals.js",
     "migrate:deals-status": "node scripts/migrateDealsStatus.js",
     "test": "jest"
