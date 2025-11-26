@@ -10,6 +10,7 @@
     "setup:db": "node scripts/setupDatabase.js",
     "ingest:seed": "node scripts/seedIngestionJob.js",
     "ingest:seed:mid-michigan": "node scripts/seedMidMichiganDeals.js",
+    "ingest:csv": "node scripts/importDealsFromCSV.js",
     "ingest:promote": "node scripts/promoteIngestedDeals.js",
     "ingest:crawl:lansing": "node scripts/crawlLansingBrewery.js",
     "migrate:deals-status": "node scripts/migrateDealsStatus.js",
