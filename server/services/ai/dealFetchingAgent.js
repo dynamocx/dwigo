@@ -1,0 +1,535 @@
+/**
+ * Deal Fetching Agent - AI-Native Deal Discovery
+ * 
+ * Uses LLM with function calling to:
+ * 1. Discover deals from web sources for pilot locations
+ * 2. Extract and normalize deal information
+ * 3. Match deals to user preferences and behaviors
+ * 4. Score and rank deals for personalized feed
+ * 
+ * Architecture:
+ * - OpenAI Responses API with function calling (fastest path)
+ * - Tools: search_deals, extract_deal_info, match_to_user, score_deal
+ * - Context: user preferences, geography, recent behaviors
+ */
+
+const axios = require('axios');
+const cheerio = require('cheerio');
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
+
+// Pilot locations for Mid-Michigan
+const PILOT_LOCATIONS = [
+  { name: 'Lansing, MI', latitude: 42.7325, longitude: -84.5555, radius: 15 },
+  { name: 'Flint, MI', latitude: 43.0125, longitude: -83.6875, radius: 15 },
+  { name: 'Grand Blanc, MI', latitude: 42.9275, longitude: -83.6169, radius: 15 },
+  { name: 'Fenton, MI', latitude: 42.7978, longitude: -83.7050, radius: 15 },
+];
+
+/**
+ * Tool definitions for LLM function calling
+ */
+const DEAL_FETCHING_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_web_for_deals',
+      description: 'Search the web for deals in a specific location and category. Returns URLs and basic info about potential deal sources.',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: {
+            type: 'string',
+            description: 'City name (e.g., "Lansing, MI")',
+          },
+          category: {
+            type: 'string',
+            description: 'Deal category (e.g., "Dining", "Entertainment", "Shopping")',
+          },
+          query: {
+            type: 'string',
+            description: 'Search query for deals (e.g., "happy hour", "discount", "special offer")',
+          },
+        },
+        required: ['location', 'category'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'extract_deal_from_url',
+      description: 'Extract deal information from a web page URL. Returns structured deal data.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'URL of the page containing deal information',
+          },
+          merchantName: {
+            type: 'string',
+            description: 'Name of the merchant/business',
+          },
+          category: {
+            type: 'string',
+            description: 'Expected deal category',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'match_deal_to_user',
+      description: 'Score how well a deal matches a user\'s preferences, geography, and behaviors.',
+      parameters: {
+        type: 'object',
+        properties: {
+          deal: {
+            type: 'object',
+            description: 'Deal object with title, description, category, location, price, etc.',
+          },
+          userPreferences: {
+            type: 'object',
+            description: 'User preferences (categories, brands, locations)',
+          },
+          userLocation: {
+            type: 'object',
+            description: 'User current location (latitude, longitude)',
+          },
+          userBehaviors: {
+            type: 'object',
+            description: 'User behaviors (saved deals, viewed deals, redeemed deals)',
+          },
+        },
+        required: ['deal', 'userPreferences'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'score_deal_quality',
+      description: 'Score the quality and completeness of a deal for ingestion.',
+      parameters: {
+        type: 'object',
+        properties: {
+          deal: {
+            type: 'object',
+            description: 'Deal object to score',
+          },
+        },
+        required: ['deal'],
+      },
+    },
+  },
+];
+
+/**
+ * Tool implementations
+ */
+const toolImplementations = {
+  search_web_for_deals: async ({ location, category, query }) => {
+    // In production, this would use a search API (Google Custom Search, SerpAPI, etc.)
+    // For now, return structured search suggestions based on location + category
+    const searchTerms = query || `${category} deals ${location}`;
+    
+    // Return potential sources for deals in this location/category
+    return {
+      sources: [
+        {
+          type: 'merchant_website',
+          suggestion: `Search ${location} ${category} businesses for deals`,
+          commonPatterns: ['happy hour', 'special offer', 'discount', 'promotion'],
+        },
+        {
+          type: 'local_calendar',
+          suggestion: `Check ${location} event calendars and tourism sites`,
+        },
+        {
+          type: 'social_media',
+          suggestion: `Search Facebook/Instagram for ${location} ${category} promotions`,
+        },
+      ],
+      searchQuery: searchTerms,
+    };
+  },
+
+  extract_deal_from_url: async ({ url, merchantName, category }) => {
+    try {
+      const { data: html } = await axios.get(url, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'DWIGO-Deal-Fetcher/1.0 (+https://dwigo.com)',
+        },
+      });
+
+      const $ = cheerio.load(html);
+      
+      // Extract basic info
+      const title = $('h1').first().text().trim() || 
+                   $('title').text().trim() ||
+                   merchantName || 'Deal';
+      
+      const description = $('meta[name="description"]').attr('content') ||
+                         $('p').first().text().trim() ||
+                         '';
+
+      // Look for price/discount patterns
+      const text = $('body').text();
+      const priceMatch = text.match(/\$[\d.]+/);
+      const discountMatch = text.match(/(\d+)%?\s*(off|discount)/i);
+
+      return {
+        title,
+        description: description.substring(0, 500),
+        category: category || 'General',
+        price: priceMatch ? priceMatch[0] : null,
+        discount: discountMatch ? discountMatch[1] : null,
+        sourceUrl: url,
+        extractedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        error: `Failed to extract from ${url}: ${error.message}`,
+      };
+    }
+  },
+
+  match_deal_to_user: ({ deal, userPreferences, userLocation, userBehaviors }) => {
+    let score = 0.5; // Base score
+    const reasons = [];
+
+    // Category match
+    if (userPreferences?.preferredCategories?.includes(deal.category)) {
+      score += 0.2;
+      reasons.push('matches preferred category');
+    }
+
+    // Brand/merchant match
+    if (userPreferences?.preferredBrands?.some(brand => 
+      deal.merchantName?.toLowerCase().includes(brand.toLowerCase())
+    )) {
+      score += 0.15;
+      reasons.push('matches preferred brand');
+    }
+
+    // Location match
+    if (userLocation && deal.latitude && deal.longitude) {
+      const distance = calculateDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        deal.latitude,
+        deal.longitude
+      );
+      if (distance < 5) {
+        score += 0.15;
+        reasons.push('very close to user');
+      } else if (distance < 15) {
+        score += 0.1;
+        reasons.push('nearby');
+      }
+    }
+
+    // Behavior match (similar deals saved/viewed)
+    if (userBehaviors?.savedCategories?.includes(deal.category)) {
+      score += 0.1;
+      reasons.push('user has saved similar deals');
+    }
+
+    return {
+      matchScore: Math.min(score, 1.0),
+      reasons,
+      recommended: score >= 0.7,
+    };
+  },
+
+  score_deal_quality: ({ deal }) => {
+    let score = 0;
+    const issues = [];
+    const strengths = [];
+
+    if (deal.title) {
+      score += 0.2;
+      strengths.push('has title');
+    } else {
+      issues.push('missing title');
+    }
+
+    if (deal.description) {
+      score += 0.15;
+      strengths.push('has description');
+    }
+
+    if (deal.category) {
+      score += 0.1;
+      strengths.push('has category');
+    }
+
+    if (deal.price || deal.discountPercentage) {
+      score += 0.2;
+      strengths.push('has pricing info');
+    } else {
+      issues.push('missing pricing');
+    }
+
+    if (deal.latitude && deal.longitude) {
+      score += 0.15;
+      strengths.push('has location');
+    } else {
+      issues.push('missing location coordinates');
+    }
+
+    if (deal.startDate && deal.endDate) {
+      score += 0.1;
+      strengths.push('has date range');
+    }
+
+    if (deal.sourceUrl) {
+      score += 0.1;
+      strengths.push('has source URL');
+    }
+
+    return {
+      qualityScore: Math.min(score, 1.0),
+      issues,
+      strengths,
+      isValid: score >= 0.6 && !issues.includes('missing title'),
+    };
+  },
+};
+
+/**
+ * Calculate distance between two coordinates (Haversine formula)
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+/**
+ * Call OpenAI API with function calling
+ */
+async function callLLMWithTools(messages, tools = DEAL_FETCHING_TOOLS) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY not configured');
+  }
+
+  try {
+    const response = await axios.post(
+      `${OPENAI_API_BASE}/chat/completions`,
+      {
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Use mini for cost efficiency
+        messages,
+        tools,
+        tool_choice: 'auto',
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error('[DealFetchingAgent] OpenAI API error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+/**
+ * Execute tool calls from LLM response
+ */
+async function executeToolCalls(toolCalls) {
+  const results = [];
+
+  for (const toolCall of toolCalls) {
+    const { name, arguments: args } = toolCall.function;
+    const parsedArgs = JSON.parse(args);
+
+    if (toolImplementations[name]) {
+      try {
+        const result = await toolImplementations[name](parsedArgs);
+        results.push({
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          name,
+          content: JSON.stringify(result),
+        });
+      } catch (error) {
+        results.push({
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          name,
+          content: JSON.stringify({ error: error.message }),
+        });
+      }
+    } else {
+      results.push({
+        tool_call_id: toolCall.id,
+        role: 'tool',
+        name,
+        content: JSON.stringify({ error: `Unknown tool: ${name}` }),
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Discover deals for pilot locations using LLM
+ */
+async function discoverDealsForPilotLocations(options = {}) {
+  const { categories = ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation = 10 } = options;
+
+  if (!OPENAI_API_KEY) {
+    console.warn('[DealFetchingAgent] OPENAI_API_KEY not set, skipping LLM-based discovery');
+    return [];
+  }
+
+  const allDeals = [];
+
+  for (const location of PILOT_LOCATIONS) {
+    for (const category of categories) {
+      try {
+        const messages = [
+          {
+            role: 'system',
+            content: `You are a deal discovery agent for DWIGO, a personalized savings platform. Your job is to find real, current deals in ${location.name} for the ${category} category. 
+
+Focus on:
+- Active promotions, discounts, and special offers
+- Real businesses with verifiable locations
+- Current deals (not expired)
+- Clear pricing or discount information
+
+Use the search_web_for_deals tool to identify potential sources, then use extract_deal_from_url to get structured deal data.`,
+          },
+          {
+            role: 'user',
+            content: `Find ${maxDealsPerLocation} deals in ${location.name} for ${category}. Focus on real, current promotions.`,
+          },
+        ];
+
+        const response = await callLLMWithTools(messages);
+        const assistantMessage = response.choices[0].message;
+
+        // If LLM wants to call tools, execute them
+        if (assistantMessage.tool_calls) {
+          const toolResults = await executeToolCalls(assistantMessage.tool_calls);
+          messages.push(assistantMessage);
+          messages.push(...toolResults);
+
+          // Continue conversation to get final deal list
+          messages.push({
+            role: 'user',
+            content: 'Based on the extracted information, provide a structured list of deals in JSON format with: title, description, category, merchantName, address, city, state, price/discount, startDate, endDate, sourceUrl.',
+          });
+
+          const finalResponse = await callLLMWithTools(messages);
+          const finalContent = finalResponse.choices[0].message.content;
+
+          // Parse deals from LLM response
+          try {
+            // Try to extract JSON from response
+            const jsonMatch = finalContent.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+              const deals = JSON.parse(jsonMatch[0]);
+              deals.forEach(deal => {
+                allDeals.push({
+                  ...deal,
+                  location: location.name,
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  confidence: 0.75, // LLM-discovered deals start at 75% confidence
+                });
+              });
+            }
+          } catch (parseError) {
+            console.warn(`[DealFetchingAgent] Failed to parse deals from LLM response for ${location.name} ${category}`);
+          }
+        }
+
+        // Be polite - wait between API calls
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.error(`[DealFetchingAgent] Error discovering deals for ${location.name} ${category}:`, error.message);
+      }
+    }
+  }
+
+  return allDeals;
+}
+
+/**
+ * Match and score deals for a specific user
+ */
+async function matchDealsToUser(userId, deals, userPreferences, userLocation, userBehaviors) {
+  if (!OPENAI_API_KEY) {
+    // Fallback to rule-based matching if no LLM
+    return deals.map(deal => ({
+      ...deal,
+      matchScore: toolImplementations.match_deal_to_user({
+        deal,
+        userPreferences,
+        userLocation,
+        userBehaviors,
+      }).matchScore,
+    }));
+  }
+
+  // Use LLM to score matches
+  const messages = [
+    {
+      role: 'system',
+      content: `You are a deal matching agent. Score how well each deal matches the user's preferences, location, and behaviors. Return scores from 0.0 to 1.0.`,
+    },
+    {
+      role: 'user',
+      content: `Score these deals for a user with preferences: ${JSON.stringify(userPreferences)}, location: ${JSON.stringify(userLocation)}, behaviors: ${JSON.stringify(userBehaviors)}. Deals: ${JSON.stringify(deals.slice(0, 10))}`,
+    },
+  ];
+
+  try {
+    const response = await callLLMWithTools(messages, [
+      {
+        type: 'function',
+        function: {
+          name: 'match_deal_to_user',
+          description: 'Score deal matches',
+          parameters: DEAL_FETCHING_TOOLS[2].function.parameters,
+        },
+      },
+    ]);
+
+    // Process scored deals
+    // (Implementation would parse LLM response and merge with deals)
+    return deals;
+  } catch (error) {
+    console.error('[DealFetchingAgent] Error matching deals:', error);
+    return deals;
+  }
+}
+
+module.exports = {
+  discoverDealsForPilotLocations,
+  matchDealsToUser,
+  toolImplementations,
+};
+

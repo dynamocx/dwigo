@@ -14,6 +14,7 @@
     "ingest:promote": "node scripts/promoteIngestedDeals.js",
     "ingest:crawl:lansing": "node scripts/crawlLansingBrewery.js",
     "ingest:sync:eventbrite": "node scripts/syncEventbrite.js",
+    "ingest:ai:fetch": "node scripts/fetchDealsWithAI.js",
     "verify:deals": "node scripts/verifySampleDeals.js",
     "migrate:deals-status": "node scripts/migrateDealsStatus.js",
     "test": "jest"

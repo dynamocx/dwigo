@@ -57,6 +57,7 @@ app.use('/api/location', require('./routes/location'));
 app.use('/api/flags', require('./routes/flags'));
 app.use('/api/ingestion', require('./routes/ingestion'));
 app.use('/api/admin/ingestion', require('./routes/admin/ingestionReview'));
+app.use('/api/admin/ai', require('./routes/admin/aiDealFetching'));
 app.use('/api/events', require('./routes/events'));
 
 if (process.env.ENABLE_SCHEDULER === 'true') {

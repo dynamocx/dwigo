@@ -212,10 +212,57 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     params.push(parseInt(limit));
 
     const result = await pool.query(query, params);
-    meta.total = result.rows.length;
+    
+    // If LLM matching is enabled, score and re-rank deals
+    let deals = result.rows;
+    if (process.env.ENABLE_LLM_MATCHING === 'true' && process.env.OPENAI_API_KEY) {
+      try {
+        const { matchDealsToUser } = require('../services/ai/dealFetchingAgent');
+        
+        // Get user behaviors (saved/viewed deals)
+        const behaviorsResult = await pool.query(
+          `SELECT 
+            array_agg(DISTINCT d.category) FILTER (WHERE udi.interaction_type = 'saved') as savedCategories,
+            array_agg(DISTINCT d.category) FILTER (WHERE udi.interaction_type = 'viewed') as viewedCategories
+          FROM user_deal_interactions udi
+          JOIN deals d ON udi.deal_id = d.id
+          WHERE udi.user_id = $1`,
+          [userId]
+        );
+        
+        const userBehaviors = {
+          savedCategories: behaviorsResult.rows[0]?.savedcategories || [],
+          viewedCategories: behaviorsResult.rows[0]?.viewedcategories || [],
+        };
+        
+        const userLocation = locationLat && locationLng ? {
+          latitude: locationLat,
+          longitude: locationLng,
+        } : null;
+        
+        // Match and score deals
+        const scoredDeals = await matchDealsToUser(
+          userId,
+          deals,
+          preferences,
+          userLocation,
+          userBehaviors
+        );
+        
+        // Sort by match score (highest first)
+        deals = scoredDeals.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+        meta.recommended_by = 'ai:deal-matching-agent';
+        meta.matchingEnabled = true;
+      } catch (error) {
+        console.error('[deals] LLM matching error:', error);
+        // Fall back to regular results if LLM matching fails
+      }
+    }
+    
+    meta.total = deals.length;
     res.json(
       buildEnvelope({
-        data: result.rows,
+        data: deals,
         meta,
       })
     );

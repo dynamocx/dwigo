@@ -100,6 +100,13 @@ export const submitManualDeal = (deal: ManualDealEntry) =>
     buildConfig()
   );
 
+export const fetchDealsWithAI = (options?: { categories?: string[]; maxDealsPerLocation?: number }) =>
+  dwigo.post<{ categories?: string[]; maxDealsPerLocation?: number }, { message: string; dealCount: number; jobId: string; stats: unknown }>(
+    '/admin/ai/fetch-deals',
+    options || {},
+    buildConfig()
+  );
+
 export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; dealCount: number; jobId: string; stats: unknown }>> => {
   const formData = new FormData();
   formData.append('csv', file);

@@ -25,27 +25,60 @@ const startScheduledJobs = () => {
     void enqueueNotification({ type: 'hourly-nudge-sweep' });
   });
 
-  // Daily Eventbrite sync (03:00 AM UTC / 11:00 PM EST previous day)
-  cron.schedule('0 3 * * *', async () => {
-    try {
-      const { fetchMidMichiganEvents } = require('../services/aggregators/eventbrite');
-      const deals = await fetchMidMichiganEvents({
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-      });
-      
-      if (deals.length > 0) {
-        void enqueueIngestionJob({
-          source: 'aggregator:eventbrite',
-          scope: 'mid-michigan-pilot',
-          deals,
+  // Daily AI Deal Fetching (04:00 AM UTC / 12:00 AM EST)
+  if (process.env.OPENAI_API_KEY) {
+    cron.schedule('0 4 * * *', async () => {
+      try {
+        const { discoverDealsForPilotLocations } = require('../services/ai/dealFetchingAgent');
+        const deals = await discoverDealsForPilotLocations({
+          categories: ['Dining', 'Entertainment', 'Shopping'],
+          maxDealsPerLocation: 10,
         });
-        console.log(`[Scheduler] Enqueued ${deals.length} Eventbrite events for ingestion`);
+        
+        if (deals.length > 0) {
+          // Transform to ingestion format
+          const ingestionDeals = deals.map(deal => ({
+            merchantAlias: deal.merchantName || 'Unknown Merchant',
+            rawPayload: {
+              title: deal.title,
+              description: deal.description,
+              category: deal.category,
+              address: deal.address,
+              city: deal.city || deal.location?.split(',')[0],
+              state: deal.state || 'MI',
+              latitude: deal.latitude,
+              longitude: deal.longitude,
+              startDate: deal.startDate,
+              endDate: deal.endDate,
+              price: deal.price,
+              discountPercentage: deal.discountPercentage,
+              sourceUrl: deal.sourceUrl,
+            },
+            normalizedPayload: {
+              title: deal.title,
+              category: deal.category,
+              location: {
+                city: deal.city || deal.location?.split(',')[0],
+                state: deal.state || 'MI',
+                latitude: deal.latitude,
+                longitude: deal.longitude,
+              },
+            },
+            confidence: deal.confidence || 0.75,
+          }));
+          
+          void enqueueIngestionJob({
+            source: 'ai:deal-fetching-agent',
+            scope: 'mid-michigan-pilot',
+            deals: ingestionDeals,
+          });
+          console.log(`[Scheduler] Enqueued ${deals.length} AI-discovered deals for ingestion`);
+        }
+      } catch (error) {
+        console.error('[Scheduler] AI deal fetching failed:', error);
       }
-    } catch (error) {
-      console.error('[Scheduler] Eventbrite sync failed:', error);
-    }
-  });
+    });
+  }
 
   console.log('[Scheduler] cron jobs initialised');
 };

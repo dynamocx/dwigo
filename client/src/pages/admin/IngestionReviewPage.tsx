@@ -25,6 +25,7 @@ import {
   rejectIngestionRows,
   seedIngestionJob,
   seedMidMichiganDeals,
+  fetchDealsWithAI,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
@@ -125,6 +126,16 @@ const IngestionReviewPage = () => {
     },
   });
 
+  const aiFetchMutation = useMutation({
+    mutationFn: () => fetchDealsWithAI({ categories: ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation: 5 }),
+    onSuccess: () => {
+      // Wait a moment for the job to process, then refresh
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+      }, 5000); // AI takes longer
+    },
+  });
+
   const rows: IngestedDealRow[] = pendingQuery.data?.data ?? [];
 
   return (
@@ -160,6 +171,15 @@ const IngestionReviewPage = () => {
               <Button
                 color="inherit"
                 size="small"
+                variant="contained"
+                onClick={() => aiFetchMutation.mutate()}
+                disabled={aiFetchMutation.isPending}
+              >
+                {aiFetchMutation.isPending ? 'AI Fetching...' : '🤖 Fetch with AI'}
+              </Button>
+              <Button
+                color="inherit"
+                size="small"
                 onClick={() => seedMidMichiganMutation.mutate()}
                 disabled={seedMidMichiganMutation.isLoading}
               >
@@ -184,6 +204,15 @@ const IngestionReviewPage = () => {
 
       {rows.length > 0 ? (
         <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <Button
+            variant="contained"
+            size="small"
+            color="primary"
+            onClick={() => aiFetchMutation.mutate()}
+            disabled={aiFetchMutation.isPending}
+          >
+            {aiFetchMutation.isPending ? 'AI Fetching...' : '🤖 Fetch Deals with AI'}
+          </Button>
           <Button
             variant="outlined"
             size="small"
