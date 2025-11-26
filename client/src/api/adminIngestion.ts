@@ -104,18 +104,36 @@ export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; 
   const formData = new FormData();
   formData.append('csv', file);
 
-  return fetch(`${import.meta.env.VITE_API_URL || '/api'}/admin/ingestion/upload-csv`, {
+  const apiUrl = import.meta.env.VITE_API_URL || '/api';
+  
+  // Don't set Content-Type header - browser will set it with boundary for FormData
+  const headers: HeadersInit = {
+    [ADMIN_HEADER]: adminToken,
+  };
+
+  return fetch(`${apiUrl}/admin/ingestion/upload-csv`, {
     method: 'POST',
-    headers: {
-      [ADMIN_HEADER]: adminToken,
-    },
+    headers,
     body: formData,
   }).then(async (res) => {
     if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.error?.message || 'Failed to upload CSV');
+      let errorMessage = 'Failed to upload CSV';
+      try {
+        const error = await res.json();
+        errorMessage = error.error?.message || errorMessage;
+      } catch {
+        // If response isn't JSON, use status text
+        errorMessage = res.statusText || `Server error (${res.status})`;
+      }
+      throw new Error(errorMessage);
     }
     return res.json();
+  }).catch((error) => {
+    // Handle network errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Connection failed. Please check your internet connection or VPN.');
+    }
+    throw error;
   });
 };
 
