@@ -432,10 +432,18 @@ async function discoverDealsForPilotLocations(options = {}) {
       try {
         console.log(`[DealFetchingAgent] Discovering deals for ${location.name} - ${category}...`);
         
-        // Simplified approach: Ask LLM to generate realistic deals based on known patterns
-        // In production, this would be enhanced with actual web search APIs
+        // IMPORTANT: This is a placeholder implementation.
+        // In production, this should:
+        // 1. Search for REAL businesses in the area (Google Places, Yelp, etc.)
+        // 2. Find actual current deals/promotions for those businesses
+        // 3. Validate merchants exist before generating deals
+        // 
+        // For now, we're generating synthetic deals as a proof of concept.
+        // These should be manually reviewed and validated before promotion.
+        
         const now = new Date();
         const currentDateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        const currentYear = now.getFullYear();
         const futureDate = new Date(now);
         futureDate.setDate(futureDate.getDate() + 60); // 60 days from now
         const futureDateStr = futureDate.toISOString().split('T')[0];
@@ -443,31 +451,37 @@ async function discoverDealsForPilotLocations(options = {}) {
         const messages = [
           {
             role: 'system',
-            content: `You are a deal discovery agent for DWIGO. Generate realistic, CURRENT deals for ${location.name} in the ${category} category. 
+            content: `You are a deal discovery agent for DWIGO. 
 
-IMPORTANT: Today's date is ${currentDateStr} (November 2025). All dates must be in 2025 or later.
+CRITICAL INSTRUCTIONS:
+1. DO NOT invent fake business names. Only use REAL, VERIFIABLE businesses that exist in ${location.name}.
+2. Today's date is ${currentDateStr} (${currentYear}). ALL dates must be in ${currentYear} or later.
+3. If you don't know real businesses in ${location.name}, return an empty array rather than making up fake ones.
+4. Business names must be actual establishments that can be verified online.
 
 Return ONLY a valid JSON array of deals. Each deal must have:
 - title: string (e.g., "Happy Hour Special", "20% Off Weekend Sale")
 - description: string (brief description of the deal)
 - category: "${category}"
-- merchantName: string (realistic business name for ${location.name})
-- address: string (street address)
+- merchantName: string (REAL business name that exists in ${location.name} - verify this!)
+- address: string (real street address if known, otherwise empty)
 - city: "${location.name.split(',')[0]}"
 - state: "MI"
 - latitude: ${location.latitude}
 - longitude: ${location.longitude}
 - price: number (optional, if fixed price deal)
 - discountPercentage: number (optional, if percentage discount)
-- startDate: ISO date string (must be ${currentDateStr} or later - use 2025 dates only!)
-- endDate: ISO date string (must be 30-90 days after startDate - use 2025 dates only!)
-- sourceUrl: string (realistic URL or "https://dwigo.com")
+- startDate: ISO date string (must be ${currentDateStr} or later - use ${currentYear} dates only!)
+- endDate: ISO date string (must be 30-90 days after startDate - use ${currentYear} dates only!)
+- sourceUrl: string (real URL if available, otherwise "https://dwigo.com")
 
-Generate ${maxDealsPerLocation} diverse, realistic deals. Make them sound like real promotions you'd find in ${location.name}. ALL DATES MUST BE IN 2025.`,
+If you cannot find real businesses in ${location.name} for ${category}, return an empty array [].
+
+Generate ${maxDealsPerLocation} deals ONLY if you can verify the businesses are real. ALL DATES MUST BE IN ${currentYear}.`,
           },
           {
             role: 'user',
-            content: `Generate ${maxDealsPerLocation} realistic ${category} deals for ${location.name}. Today is ${currentDateStr}. Use dates in 2025 only. Return as JSON array only, no other text.`,
+            content: `Find ${maxDealsPerLocation} REAL ${category} businesses in ${location.name} and generate current deals for them. Today is ${currentDateStr} (${currentYear}). Use only real business names that exist. Return as JSON array only, no other text. If you cannot verify real businesses, return [].`,
           },
         ];
 
@@ -535,7 +549,8 @@ Generate ${maxDealsPerLocation} diverse, realistic deals. Make them sound like r
                   startDate: startDate.toISOString(),
                   endDate: endDate.toISOString(),
                   sourceUrl: deal.sourceUrl || `https://dwigo.com/deals/${location.name.toLowerCase().replace(/\s+/g, '-')}`,
-                  confidence: 0.7, // LLM-generated deals start at 70% confidence
+                  confidence: 0.5, // Lower confidence for LLM-generated deals - requires validation
+                  requiresValidation: true, // Flag that this needs merchant validation
                 });
               }
             });

@@ -283,6 +283,54 @@ const promoteIngestedRows = async (rows) => {
 
         const fields = extractDealFields(row, rawPayload, normalizedPayload, jobInfo);
         
+        // Validate merchant exists (if enabled)
+        let merchantValidation = null;
+        if (process.env.ENABLE_MERCHANT_VALIDATION === 'true') {
+          const { validateMerchant, shouldRejectMerchant: shouldReject } = require('./merchantValidation');
+          const merchantInfo = {
+            name: alias || fields.title,
+            city: normalizedPayload.location?.city || rawPayload.city || '',
+            state: normalizedPayload.location?.state || rawPayload.state || '',
+            address: rawPayload.address || '',
+            latitude: normalizedPayload.location?.latitude || rawPayload.latitude,
+            longitude: normalizedPayload.location?.longitude || rawPayload.longitude,
+          };
+          
+          merchantValidation = await validateMerchant(merchantInfo);
+          const rejectionCheck = shouldReject(merchantValidation);
+          
+          if (rejectionCheck.shouldReject) {
+            await client.query('ROLLBACK');
+            
+            await client.query(
+              `
+                UPDATE ingested_deal_raw
+                SET status = 'auto_rejected',
+                    normalized_payload = $1::jsonb
+                WHERE id = $2
+              `,
+              [
+                JSON.stringify({
+                  ...normalizedPayload,
+                  merchantValidation,
+                  rejectionReason: rejectionCheck.reason,
+                }),
+                row.id,
+              ]
+            );
+            
+            await client.query('COMMIT');
+            
+            console.warn(
+              `[dealPromotion] Auto-rejected deal ${row.id} (merchant validation):`,
+              rejectionCheck.reason
+            );
+            
+            stats.errors += 1;
+            continue;
+          }
+        }
+        
         // Validate deal quality
         const qualityAssessment = assessDealQuality(fields, rawPayload, normalizedPayload);
         
