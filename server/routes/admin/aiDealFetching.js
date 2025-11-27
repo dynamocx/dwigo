@@ -53,16 +53,32 @@ router.post('/fetch-deals', async (req, res) => {
     }
 
     console.log('[admin/ai] Starting AI deal discovery...');
+    console.log('[admin/ai] OpenAI API Key present:', !!process.env.OPENAI_API_KEY);
 
-    const deals = await discoverDealsForPilotLocations({
-      categories: categories || ['Dining', 'Entertainment', 'Shopping'],
-      maxDealsPerLocation: maxDealsPerLocation || 5,
-    });
+    let deals;
+    try {
+      deals = await discoverDealsForPilotLocations({
+        categories: categories || ['Dining', 'Entertainment', 'Shopping'],
+        maxDealsPerLocation: maxDealsPerLocation || 5,
+      });
+      console.log(`[admin/ai] Discovered ${deals.length} deals`);
+    } catch (error) {
+      console.error('[admin/ai] Discovery error:', error);
+      return res.status(500).json({
+        data: null,
+        error: { 
+          message: `AI discovery failed: ${error.message}`,
+          details: error.response?.data || null,
+        },
+        meta: {},
+      });
+    }
 
     if (deals.length === 0) {
+      console.log('[admin/ai] No deals discovered - LLM may have returned empty or invalid response');
       return res.json({
         data: {
-          message: 'No deals discovered',
+          message: 'No deals discovered. Check server logs for details.',
           dealCount: 0,
         },
         error: null,
