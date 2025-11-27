@@ -284,8 +284,9 @@ const promoteIngestedRows = async (rows) => {
         const fields = extractDealFields(row, rawPayload, normalizedPayload, jobInfo);
         
         // Validate merchant exists (if enabled)
+        // NOTE: Currently disabled by default - enable when Google Places API key is configured
         let merchantValidation = null;
-        if (process.env.ENABLE_MERCHANT_VALIDATION === 'true') {
+        if (process.env.ENABLE_MERCHANT_VALIDATION === 'true' && process.env.GOOGLE_PLACES_API_KEY) {
           const { validateMerchant, shouldRejectMerchant: shouldReject } = require('./merchantValidation');
           const merchantInfo = {
             name: alias || fields.title,
