@@ -347,7 +347,27 @@ async function callLLMWithTools(messages, tools = DEAL_FETCHING_TOOLS) {
 
     return response.data;
   } catch (error) {
-    console.error('[DealFetchingAgent] OpenAI API error:', error.response?.data || error.message);
+    const errorDetails = error.response?.data || {};
+    const errorMessage = errorDetails.error?.message || error.message;
+    const errorCode = errorDetails.error?.code || error.response?.status;
+    
+    console.error('[DealFetchingAgent] OpenAI API error:', {
+      message: errorMessage,
+      code: errorCode,
+      status: error.response?.status,
+      type: errorDetails.error?.type,
+      fullError: errorDetails,
+    });
+    
+    // Provide helpful error messages for common issues
+    if (errorCode === 'insufficient_quota' || errorMessage?.includes('quota')) {
+      throw new Error('OpenAI API: Insufficient credits/quota. Please add credits to your OpenAI account or check your billing.');
+    } else if (errorCode === 'invalid_api_key' || error.response?.status === 401) {
+      throw new Error('OpenAI API: Invalid API key. Please check your OPENAI_API_KEY environment variable.');
+    } else if (errorCode === 'rate_limit_exceeded') {
+      throw new Error('OpenAI API: Rate limit exceeded. Please wait a moment and try again.');
+    }
+    
     throw error;
   }
 }
