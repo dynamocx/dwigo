@@ -128,11 +128,16 @@ const IngestionReviewPage = () => {
 
   const aiFetchMutation = useMutation({
     mutationFn: () => fetchDealsWithAI({ categories: ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation: 5 }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('[AI Fetch] Success:', data);
       // Wait a moment for the job to process, then refresh
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+        void pendingQuery.refetch();
       }, 5000); // AI takes longer
+    },
+    onError: (error) => {
+      console.error('[AI Fetch] Error:', error);
     },
   });
 
@@ -161,6 +166,18 @@ const IngestionReviewPage = () => {
 
       {pendingQuery.isError ? (
         <Alert severity="error">Failed to load pending ingestion rows.</Alert>
+      ) : null}
+
+      {aiFetchMutation.isError ? (
+        <Alert severity="error" onClose={() => aiFetchMutation.reset()}>
+          AI Fetch failed: {aiFetchMutation.error instanceof Error ? aiFetchMutation.error.message : 'Unknown error'}
+        </Alert>
+      ) : null}
+
+      {aiFetchMutation.isSuccess && aiFetchMutation.data?.data ? (
+        <Alert severity="success" onClose={() => aiFetchMutation.reset()}>
+          AI Fetch completed! Found {aiFetchMutation.data.data.dealCount} deals. They should appear below shortly.
+        </Alert>
       ) : null}
 
       {rows.length === 0 && !pendingQuery.isLoading ? (

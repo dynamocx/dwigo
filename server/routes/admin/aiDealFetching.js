@@ -153,7 +153,12 @@ router.post('/fetch-deals', async (req, res) => {
       deals: ingestionDeals,
     };
 
+    console.log(`[admin/ai] Processing ${ingestionDeals.length} deals through ingestion pipeline...`);
     const result = await processIngestionJob(payload);
+    console.log(`[admin/ai] Ingestion job completed:`, {
+      jobId: result.jobId,
+      stats: result.stats,
+    });
 
     res.json({
       data: {
