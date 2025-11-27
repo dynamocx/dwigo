@@ -54,16 +54,47 @@ const extractDealFields = (row, rawPayload = {}, normalizedPayload = {}, jobInfo
 
   const schedule = normalizedPayload.schedule || {};
   const scheduleRule = schedule.rule || {};
-  const startDate =
+  let startDate =
     scheduleRule.startsAt ||
     rawPayload.startDate ||
     rawPayload.startsAt ||
     null;
-  const endDate =
+  let endDate =
     scheduleRule.endsAt ||
     rawPayload.endDate ||
     rawPayload.endsAt ||
     null;
+  
+  // Validate and fix dates - ensure they're in the future and in 2025+
+  const now = new Date();
+  if (startDate) {
+    const parsedStart = new Date(startDate);
+    // If start date is in the past or before 2025, use today
+    if (parsedStart < now || parsedStart.getFullYear() < 2025) {
+      console.warn(`[dealPromotion] Fixing invalid startDate: ${startDate} -> ${now.toISOString()}`);
+      startDate = now.toISOString();
+    }
+  } else {
+    // Default to today if missing
+    startDate = now.toISOString();
+  }
+  
+  if (endDate) {
+    const parsedEnd = new Date(endDate);
+    const parsedStart = new Date(startDate);
+    // If end date is before start date or before 2025, set to 60 days from start
+    if (parsedEnd <= parsedStart || parsedEnd.getFullYear() < 2025) {
+      const fixedEnd = new Date(parsedStart);
+      fixedEnd.setDate(fixedEnd.getDate() + 60);
+      console.warn(`[dealPromotion] Fixing invalid endDate: ${endDate} -> ${fixedEnd.toISOString()}`);
+      endDate = fixedEnd.toISOString();
+    }
+  } else {
+    // Default to 60 days from start if missing
+    const defaultEnd = new Date(startDate);
+    defaultEnd.setDate(defaultEnd.getDate() + 60);
+    endDate = defaultEnd.toISOString();
+  }
 
   const status =
     row.confidence != null && Number(row.confidence) >= 0.75
