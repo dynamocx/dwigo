@@ -434,10 +434,18 @@ async function discoverDealsForPilotLocations(options = {}) {
         
         // Simplified approach: Ask LLM to generate realistic deals based on known patterns
         // In production, this would be enhanced with actual web search APIs
+        const now = new Date();
+        const currentDateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        const futureDate = new Date(now);
+        futureDate.setDate(futureDate.getDate() + 60); // 60 days from now
+        const futureDateStr = futureDate.toISOString().split('T')[0];
+        
         const messages = [
           {
             role: 'system',
-            content: `You are a deal discovery agent for DWIGO. Generate realistic, current deals for ${location.name} in the ${category} category. 
+            content: `You are a deal discovery agent for DWIGO. Generate realistic, CURRENT deals for ${location.name} in the ${category} category. 
+
+IMPORTANT: Today's date is ${currentDateStr} (November 2025). All dates must be in 2025 or later.
 
 Return ONLY a valid JSON array of deals. Each deal must have:
 - title: string (e.g., "Happy Hour Special", "20% Off Weekend Sale")
@@ -451,15 +459,15 @@ Return ONLY a valid JSON array of deals. Each deal must have:
 - longitude: ${location.longitude}
 - price: number (optional, if fixed price deal)
 - discountPercentage: number (optional, if percentage discount)
-- startDate: ISO date string (current date)
-- endDate: ISO date string (30-90 days from now)
+- startDate: ISO date string (must be ${currentDateStr} or later - use 2025 dates only!)
+- endDate: ISO date string (must be 30-90 days after startDate - use 2025 dates only!)
 - sourceUrl: string (realistic URL or "https://dwigo.com")
 
-Generate ${maxDealsPerLocation} diverse, realistic deals. Make them sound like real promotions you'd find in ${location.name}.`,
+Generate ${maxDealsPerLocation} diverse, realistic deals. Make them sound like real promotions you'd find in ${location.name}. ALL DATES MUST BE IN 2025.`,
           },
           {
             role: 'user',
-            content: `Generate ${maxDealsPerLocation} realistic ${category} deals for ${location.name}. Return as JSON array only, no other text.`,
+            content: `Generate ${maxDealsPerLocation} realistic ${category} deals for ${location.name}. Today is ${currentDateStr}. Use dates in 2025 only. Return as JSON array only, no other text.`,
           },
         ];
 
@@ -488,6 +496,29 @@ Generate ${maxDealsPerLocation} diverse, realistic deals. Make them sound like r
             deals.forEach(deal => {
               // Ensure required fields
               if (deal.title && deal.merchantName) {
+                const now = new Date();
+                const defaultStartDate = now.toISOString();
+                const defaultEndDate = new Date(now);
+                defaultEndDate.setDate(defaultEndDate.getDate() + 60); // 60 days from now
+                
+                // Parse and validate dates - fix if they're in the past or wrong year
+                let startDate = deal.startDate ? new Date(deal.startDate) : now;
+                let endDate = deal.endDate ? new Date(deal.endDate) : defaultEndDate;
+                
+                // If start date is in the past or before 2025, use today
+                if (startDate < now || startDate.getFullYear() < 2025) {
+                  console.warn(`[DealFetchingAgent] Fixing invalid startDate: ${deal.startDate} -> ${defaultStartDate}`);
+                  startDate = now;
+                }
+                
+                // If end date is before start date or before 2025, set to 60 days from start
+                if (endDate <= startDate || endDate.getFullYear() < 2025) {
+                  const fixedEndDate = new Date(startDate);
+                  fixedEndDate.setDate(fixedEndDate.getDate() + 60);
+                  console.warn(`[DealFetchingAgent] Fixing invalid endDate: ${deal.endDate} -> ${fixedEndDate.toISOString()}`);
+                  endDate = fixedEndDate;
+                }
+                
                 allDeals.push({
                   title: deal.title,
                   description: deal.description || `${deal.title} at ${deal.merchantName}`,
@@ -501,8 +532,8 @@ Generate ${maxDealsPerLocation} diverse, realistic deals. Make them sound like r
                   longitude: deal.longitude || location.longitude,
                   price: deal.price || null,
                   discountPercentage: deal.discountPercentage || null,
-                  startDate: deal.startDate || new Date().toISOString(),
-                  endDate: deal.endDate || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+                  startDate: startDate.toISOString(),
+                  endDate: endDate.toISOString(),
                   sourceUrl: deal.sourceUrl || `https://dwigo.com/deals/${location.name.toLowerCase().replace(/\s+/g, '-')}`,
                   confidence: 0.7, // LLM-generated deals start at 70% confidence
                 });
