@@ -13,6 +13,9 @@ import {
   IconButton,
   Stack,
   Typography,
+  Tabs,
+  Tab,
+  Paper,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -79,9 +82,22 @@ const PayloadViewer: React.FC<{ title: string; payload?: Record<string, unknown>
   );
 };
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+const TabPanel = ({ children, value, index }: TabPanelProps) => (
+  <div role="tabpanel" hidden={value !== index}>
+    {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+  </div>
+);
+
 const IngestionReviewPage = () => {
   const queryClient = useQueryClient();
   const [limit] = useState(50);
+  const [tabValue, setTabValue] = useState(0); // 0 = Auto-Seeding, 1 = Add Deals
 
   const pendingQuery = useQuery({
     queryKey: ['admin-ingestion-pending', limit],
@@ -143,6 +159,29 @@ const IngestionReviewPage = () => {
 
   const rows: IngestedDealRow[] = pendingQuery.data?.data ?? [];
 
+  // Extract deal details from payloads
+  const getDealDetails = (row: IngestedDealRow) => {
+    const normalized = row.normalized_payload || {};
+    const raw = row.raw_payload || {};
+    
+    return {
+      title: (normalized.title as string) || (raw.title as string) || 'Untitled Deal',
+      description: (normalized.description as string) || (raw.description as string) || '',
+      category: (normalized.category as string) || (raw.category as string) || '',
+      city: (normalized.location as { city?: string })?.city || (raw.city as string) || '',
+      state: (normalized.location as { state?: string })?.state || (raw.state as string) || '',
+      address: (raw.address as string) || '',
+      postalCode: (raw.postalCode as string) || '',
+      discount: (normalized.discount as { type?: string; value?: number }) || null,
+      price: (normalized.price as { currency?: string; amount?: number }) || null,
+      discountPercentage: (raw.discountPercentage as number) || null,
+      priceAmount: (raw.price as number) || null,
+      startDate: (raw.startDate as string) || '',
+      endDate: (raw.endDate as string) || '',
+      sourceUrl: (raw.sourceUrl as string) || '',
+    };
+  };
+
   return (
     <Stack spacing={3} sx={{ p: 3 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -180,66 +219,63 @@ const IngestionReviewPage = () => {
         </Alert>
       ) : null}
 
-      {rows.length === 0 && !pendingQuery.isLoading ? (
-        <Alert 
-          severity="info"
-          action={
-            <Stack direction="row" spacing={1}>
+      <Paper sx={{ width: '100%' }}>
+        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
+          <Tab label="Auto-Seeding" />
+          <Tab label="Add Deals" />
+        </Tabs>
+      </Paper>
+
+      <TabPanel value={tabValue} index={0}>
+        <Stack spacing={3}>
+          <Stack spacing={2}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Automated Deal Seeding
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Use AI-powered discovery or seed deals from predefined templates.
+            </Typography>
+            
+            <Stack direction="row" spacing={2} flexWrap="wrap">
               <Button
-                color="inherit"
-                size="small"
                 variant="contained"
+                color="primary"
                 onClick={() => aiFetchMutation.mutate()}
                 disabled={aiFetchMutation.isPending}
+                size="large"
               >
-                {aiFetchMutation.isPending ? 'AI Fetching...' : '🤖 Fetch with AI'}
+                {aiFetchMutation.isPending ? 'AI Fetching...' : '🤖 Fetch Deals with AI'}
               </Button>
               <Button
-                color="inherit"
-                size="small"
+                variant="outlined"
                 onClick={() => seedMidMichiganMutation.mutate()}
                 disabled={seedMidMichiganMutation.isLoading}
+                size="large"
               >
-                {seedMidMichiganMutation.isLoading ? 'Seeding...' : 'Seed Mid-Michigan'}
+                {seedMidMichiganMutation.isLoading ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
               </Button>
               <Button
-                color="inherit"
-                size="small"
+                variant="outlined"
                 onClick={() => seedMutation.mutate()}
                 disabled={seedMutation.isLoading}
+                size="large"
               >
                 {seedMutation.isLoading ? 'Seeding...' : 'Seed Test Deals'}
               </Button>
             </Stack>
-          }
-        >
-          No pending ingestion rows. Seed deals to get started.
-        </Alert>
-      ) : null}
+          </Stack>
 
-      <DealEntryForm />
-
-      {rows.length > 0 ? (
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button
-            variant="contained"
-            size="small"
-            color="primary"
-            onClick={() => aiFetchMutation.mutate()}
-            disabled={aiFetchMutation.isPending}
-          >
-            {aiFetchMutation.isPending ? 'AI Fetching...' : '🤖 Fetch Deals with AI'}
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => seedMidMichiganMutation.mutate()}
-            disabled={seedMidMichiganMutation.isLoading}
-          >
-            {seedMidMichiganMutation.isLoading ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
-          </Button>
+          {rows.length === 0 && !pendingQuery.isLoading ? (
+            <Alert severity="info">
+              No pending deals. Use the buttons above to fetch or seed deals.
+            </Alert>
+          ) : null}
         </Stack>
-      ) : null}
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={1}>
+        <DealEntryForm />
+      </TabPanel>
 
       <Divider />
 
@@ -252,12 +288,42 @@ const IngestionReviewPage = () => {
           const confidence = row.confidence != null ? `${(Number(row.confidence) * 100).toFixed(0)}%` : '—';
           const quality = assessDealQuality(row.normalized_payload, row.raw_payload);
           const qualityScore = `${(quality.score * 100).toFixed(0)}%`;
+          const deal = getDealDetails(row);
+          
+          // Format location
+          const locationParts = [
+            deal.address,
+            deal.city,
+            deal.state,
+            deal.postalCode,
+          ].filter(Boolean);
+          const location = locationParts.length > 0 ? locationParts.join(', ') : 'Location not specified';
+          
+          // Format discount/price info
+          const discountInfo = deal.discount?.value 
+            ? `${deal.discount.value}% off`
+            : deal.discountPercentage 
+            ? `${deal.discountPercentage}% off`
+            : null;
+          
+          const priceInfo = deal.price?.amount 
+            ? `$${deal.price.amount}`
+            : deal.priceAmount 
+            ? `$${deal.priceAmount}`
+            : null;
+          
+          // Format date range
+          const dateRange = deal.startDate && deal.endDate
+            ? `${new Date(deal.startDate).toLocaleDateString()} - ${new Date(deal.endDate).toLocaleDateString()}`
+            : deal.startDate
+            ? `Starts: ${new Date(deal.startDate).toLocaleDateString()}`
+            : null;
           
           return (
             <Grid item xs={12} key={row.id}>
               <Card variant="outlined">
                 <CardContent>
-                  <Stack spacing={1.5}>
+                  <Stack spacing={2}>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                       <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                         #{row.id} · {row.merchant_alias ?? 'Unmatched Merchant'}
@@ -273,6 +339,87 @@ const IngestionReviewPage = () => {
                         color={quality.isValid ? 'success' : 'warning'}
                         label={`Quality: ${qualityScore}`}
                       />
+                      {deal.category && (
+                        <Chip size="small" label={deal.category} color="primary" variant="outlined" />
+                      )}
+                    </Stack>
+
+                    {/* Deal Title and Description */}
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        {deal.title}
+                      </Typography>
+                      {deal.description && (
+                        <Typography variant="body2" color="text.secondary">
+                          {deal.description}
+                        </Typography>
+                      )}
+                    </Box>
+
+                    <Divider />
+
+                    {/* Deal Details */}
+                    <Stack spacing={1}>
+                      <Stack direction="row" spacing={2} flexWrap="wrap">
+                        {discountInfo && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Discount
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
+                              {discountInfo}
+                            </Typography>
+                          </Box>
+                        )}
+                        {priceInfo && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Price
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {priceInfo}
+                            </Typography>
+                          </Box>
+                        )}
+                        {dateRange && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Valid Dates
+                            </Typography>
+                            <Typography variant="body2">
+                              {dateRange}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Stack>
+
+                      {/* Location */}
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Location
+                        </Typography>
+                        <Typography variant="body2">
+                          {location}
+                        </Typography>
+                      </Box>
+
+                      {deal.sourceUrl && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            Source
+                          </Typography>
+                          <Typography 
+                            variant="body2" 
+                            component="a" 
+                            href={deal.sourceUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            sx={{ color: 'primary.main', textDecoration: 'none' }}
+                          >
+                            {deal.sourceUrl}
+                          </Typography>
+                        </Box>
+                      )}
                     </Stack>
 
                     {!quality.isValid && (
@@ -291,12 +438,12 @@ const IngestionReviewPage = () => {
                       </Alert>
                     )}
 
+                    <Divider />
+
                     <Typography variant="body2" color="text.secondary">
                       Created {formatDate(row.created_at)}
                       {row.job_started_at ? ` · Job started ${formatDate(row.job_started_at)}` : ''}
                     </Typography>
-
-                    <Divider />
 
                     <Stack spacing={1}>
                       <PayloadViewer title="Normalized Payload" payload={row.normalized_payload ?? undefined} />
