@@ -17,7 +17,12 @@ const ADMIN_HEADER = 'x-admin-token';
 const adminToken = process.env.ADMIN_API_TOKEN;
 
 const requireAdminToken = (req, res, next) => {
+  console.log(`[admin/ai] Request received: ${req.method} ${req.path}`);
+  console.log(`[admin/ai] Admin token configured: ${!!adminToken}`);
+  console.log(`[admin/ai] Incoming header: ${req.header(ADMIN_HEADER) ? 'present' : 'missing'}`);
+  
   if (!adminToken) {
+    console.error('[admin/ai] ADMIN_API_TOKEN not configured');
     return res.status(500).json({
       data: null,
       error: { message: 'ADMIN_API_TOKEN not configured on server' },
@@ -27,6 +32,7 @@ const requireAdminToken = (req, res, next) => {
 
   const incoming = req.header(ADMIN_HEADER);
   if (!incoming || incoming !== adminToken) {
+    console.warn(`[admin/ai] Unauthorized: token mismatch or missing`);
     return res.status(401).json({
       data: null,
       error: { message: 'Unauthorized' },
@@ -34,13 +40,24 @@ const requireAdminToken = (req, res, next) => {
     });
   }
 
+  console.log('[admin/ai] Admin token validated, proceeding...');
   next();
 };
+
+// Log all requests to this router
+router.use((req, res, next) => {
+  console.log(`[admin/ai] Router middleware hit: ${req.method} ${req.path}`);
+  console.log(`[admin/ai] Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  next();
+});
 
 router.use(requireAdminToken);
 
 // Trigger AI deal discovery
 router.post('/fetch-deals', async (req, res) => {
+  console.log('[admin/ai] /fetch-deals endpoint hit');
+  console.log('[admin/ai] Request body:', JSON.stringify(req.body));
+  
   try {
     const { categories, maxDealsPerLocation } = req.body;
 
