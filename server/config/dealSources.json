@@ -1,0 +1,116 @@
+[
+  {
+    "id": "fentonbrewery",
+    "merchantName": "Fenton Winery & Brewery",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.fentonbrewery.com/events",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": ".event-card, .event-item, article.event",
+      "title": "h3, h2, .event-title",
+      "desc": ".description, .event-description, p",
+      "date": ".date, .event-date, time"
+    },
+    "keywords": ["off", "discount", "happy hour", "special", "$", "flight", "growler"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "thelaundry",
+    "merchantName": "The Laundry",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.thelaundry.com/specials",
+    "fetchMode": "staticHtml",
+    "selectors": {
+      "item": ".deal, .special, .promotion, .offer",
+      "title": ".deal-title, h3, h2",
+      "desc": ".deal-body, .deal-description, p"
+    },
+    "keywords": ["special", "off", "discount", "happy hour", "deal"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "lansingbrewing",
+    "merchantName": "Lansing Brewing Company",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.lansingbrewingcompany.com/events",
+    "fetchMode": "staticHtml",
+    "selectors": {
+      "item": ".event, .event-item, article",
+      "title": "h3, h2, .event-title",
+      "desc": ".description, .event-details, p",
+      "date": ".date, .event-date"
+    },
+    "keywords": ["off", "$", "discount", "special", "event"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "keansstore",
+    "merchantName": "Kean's Store",
+    "city": "Mason",
+    "state": "MI",
+    "type": "retail",
+    "category": "Shopping",
+    "url": "https://www.keansstore.com/news",
+    "fetchMode": "staticHtml",
+    "selectors": {
+      "item": ".post, .news-item, article",
+      "title": "h2, h3, .post-title",
+      "desc": ".post-content, .excerpt, p",
+      "date": ".date, .post-date, time"
+    },
+    "keywords": ["sale", "off", "discount", "special", "promotion"],
+    "enabled": true,
+    "priority": 2
+  },
+  {
+    "id": "downtownlansing",
+    "merchantName": "Downtown Lansing Inc.",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://www.downtownlansing.org/events",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": ".event, .event-card, .event-item",
+      "title": "h3, h2, .event-title",
+      "desc": ".description, .event-details, p",
+      "date": ".date, .event-date, time"
+    },
+    "keywords": ["deal", "special", "discount", "off", "promotion"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "meridianmall",
+    "merchantName": "Meridian Mall",
+    "city": "Okemos",
+    "state": "MI",
+    "type": "retail",
+    "category": "Shopping",
+    "url": "https://www.shopmeridianmall.com/sales",
+    "fetchMode": "staticHtml",
+    "selectors": {
+      "item": ".sale, .promotion, .deal",
+      "title": ".sale-title, h3, h2",
+      "desc": ".sale-description, p",
+      "date": ".sale-date, .date"
+    },
+    "keywords": ["sale", "off", "discount", "special", "clearance"],
+    "enabled": true,
+    "priority": 2
+  }
+]
+

@@ -107,6 +107,13 @@ export const fetchDealsWithAI = (options?: { categories?: string[]; maxDealsPerL
     buildConfig()
   );
 
+export const scrapeDealsFromWeb = () =>
+  dwigo.post<never, { message: string; sourcesScraped: number; dealsExtracted: number; dealsIngested: number; jobId: string; stats: unknown }>(
+    '/admin/ai/scrape-deals',
+    undefined,
+    buildConfig()
+  );
+
 export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; dealCount: number; jobId: string; stats: unknown }>> => {
   const formData = new FormData();
   formData.append('csv', file);

@@ -29,6 +29,7 @@ import {
   seedIngestionJob,
   seedMidMichiganDeals,
   fetchDealsWithAI,
+  scrapeDealsFromWeb,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
@@ -157,6 +158,21 @@ const IngestionReviewPage = () => {
     },
   });
 
+  const scrapeMutation = useMutation({
+    mutationFn: () => scrapeDealsFromWeb(),
+    onSuccess: (data) => {
+      console.log('[Scrape] Success:', data);
+      // Wait a moment for the job to process, then refresh
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+        void pendingQuery.refetch();
+      }, 10000); // Scraping takes longer
+    },
+    onError: (error) => {
+      console.error('[Scrape] Error:', error);
+    },
+  });
+
   const rows: IngestedDealRow[] = pendingQuery.data?.data ?? [];
 
   // Extract deal details from payloads
@@ -219,6 +235,18 @@ const IngestionReviewPage = () => {
         </Alert>
       ) : null}
 
+      {scrapeMutation.isError ? (
+        <Alert severity="error" onClose={() => scrapeMutation.reset()}>
+          Web Scraping failed: {scrapeMutation.error instanceof Error ? scrapeMutation.error.message : 'Unknown error'}
+        </Alert>
+      ) : null}
+
+      {scrapeMutation.isSuccess && scrapeMutation.data?.data ? (
+        <Alert severity="success" onClose={() => scrapeMutation.reset()}>
+          Web Scraping completed! Scraped {scrapeMutation.data.data.sourcesScraped} sources, extracted {scrapeMutation.data.data.dealsExtracted} deals. They should appear below shortly.
+        </Alert>
+      ) : null}
+
       <Paper sx={{ width: '100%' }}>
         <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
           <Tab label="Auto-Seeding" />
@@ -240,6 +268,14 @@ const IngestionReviewPage = () => {
               <Button
                 variant="contained"
                 color="primary"
+                onClick={() => scrapeMutation.mutate()}
+                disabled={scrapeMutation.isPending}
+                size="large"
+              >
+                {scrapeMutation.isPending ? 'Scraping...' : '🌐 Scrape Deals from Web'}
+              </Button>
+              <Button
+                variant="outlined"
                 onClick={() => aiFetchMutation.mutate()}
                 disabled={aiFetchMutation.isPending}
                 size="large"

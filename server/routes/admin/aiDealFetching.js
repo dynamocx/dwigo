@@ -9,6 +9,7 @@
 const express = require('express');
 const pool = require('../../config/database');
 const { discoverDealsForPilotLocations, matchDealsToUser } = require('../../services/ai/dealFetchingAgent');
+const { scrapeAndIngest } = require('../../services/scrapers/scraperService');
 const { processIngestionJob } = require('../../services/ingestion');
 
 const router = express.Router();
@@ -175,6 +176,45 @@ router.post('/fetch-deals', async (req, res) => {
     res.status(500).json({
       data: null,
       error: { message: error.message || 'Failed to fetch deals with AI' },
+      meta: {},
+    });
+  }
+});
+
+// Trigger web scraping deal discovery
+router.post('/scrape-deals', async (req, res) => {
+  console.log('[admin/ai] /scrape-deals endpoint hit');
+  
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'OPENAI_API_KEY not configured. Set it in environment variables.' },
+        meta: {},
+      });
+    }
+
+    console.log('[admin/ai] Starting web scraping deal discovery...');
+
+    const result = await scrapeAndIngest();
+
+    res.json({
+      data: {
+        message: 'Web scraping completed',
+        sourcesScraped: result.sourcesScraped,
+        dealsExtracted: result.dealsExtracted,
+        dealsIngested: result.dealsIngested,
+        jobId: result.jobId,
+        stats: result.stats,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ai] scrape-deals error', error);
+    res.status(500).json({
+      data: null,
+      error: { message: error.message || 'Failed to scrape deals' },
       meta: {},
     });
   }
