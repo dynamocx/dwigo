@@ -95,7 +95,61 @@ async function fetchRenderedHtml(url, timeout = 30000) {
 }
 
 /**
+ * Extract price from text (e.g., "$15.99", "15.99", "$15")
+ */
+function extractPrice(text) {
+  if (!text) return null;
+  const match = text.match(/\$?(\d+\.?\d*)/);
+  return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * Extract discount percentage from text (e.g., "20% off", "20%", "save 20%")
+ */
+function extractDiscountPercentage(text) {
+  if (!text) return null;
+  const match = text.match(/(\d+)%/i);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Extract discount value from text (e.g., "$5 off", "save $5")
+ */
+function extractDiscountValue(text) {
+  if (!text) return null;
+  const match = text.match(/\$(\d+\.?\d*)/);
+  return match ? `$${match[1]}` : null;
+}
+
+/**
+ * Extract dates from text (various formats)
+ */
+function extractDates(text) {
+  if (!text) return { startDate: null, endDate: null };
+  
+  // Try ISO format first
+  const isoMatch = text.match(/(\d{4}-\d{2}-\d{2})/g);
+  if (isoMatch && isoMatch.length >= 2) {
+    return { startDate: isoMatch[0], endDate: isoMatch[1] };
+  }
+  
+  // Try MM/DD/YYYY format
+  const dateMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/g);
+  if (dateMatch && dateMatch.length >= 2) {
+    const start = new Date(dateMatch[0]);
+    const end = new Date(dateMatch[1]);
+    return {
+      startDate: isNaN(start.getTime()) ? null : start.toISOString(),
+      endDate: isNaN(end.getTime()) ? null : end.toISOString(),
+    };
+  }
+  
+  return { startDate: null, endDate: null };
+}
+
+/**
  * Extract text content from HTML using CSS selectors
+ * Returns structured data ready for ingestion (no LLM needed for structured sites)
  */
 function extractWithSelectors(html, selectors) {
   const $ = cheerio.load(html);
@@ -107,12 +161,31 @@ function extractWithSelectors(html, selectors) {
 
   $(selectors.item).each((index, element) => {
     const $item = $(element);
+    const title = selectors.title ? $item.find(selectors.title).first().text().trim() : '';
+    const description = selectors.desc ? $item.find(selectors.desc).first().text().trim() : '';
+    const dateText = selectors.date ? $item.find(selectors.date).first().text().trim() : '';
+    const priceText = selectors.price ? $item.find(selectors.price).first().text().trim() : '';
+    const discountText = selectors.discount ? $item.find(selectors.discount).first().text().trim() : '';
+    
+    // Extract structured data directly (no LLM needed)
+    const price = extractPrice(priceText);
+    const discountPercentage = extractDiscountPercentage(discountText || title || description);
+    const discountValue = discountPercentage ? null : extractDiscountValue(discountText || title || description);
+    const dates = extractDates(dateText || title || description);
+    
     const result = {
       index,
-      title: selectors.title ? $item.find(selectors.title).first().text().trim() : '',
-      description: selectors.desc ? $item.find(selectors.desc).first().text().trim() : '',
-      date: selectors.date ? $item.find(selectors.date).first().text().trim() : '',
+      title,
+      description,
+      date: dateText,
+      price,
+      discountPercentage,
+      discountValue,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
       rawHtml: $item.html() || '',
+      // Flag if we got enough structured data (might not need LLM)
+      isStructured: !!(title && (price || discountPercentage || discountValue)),
     };
 
     // Only include if we got at least a title

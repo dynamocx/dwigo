@@ -186,8 +186,46 @@ async function processScrapedContent(scrapeResult) {
   }
   
   console.log(`[dealExtractor] Processing ${scrapeResult.extractedItems.length} items from ${scrapeResult.merchantName}`);
-
+  
   for (const item of scrapeResult.extractedItems) {
+    // If we have structured data, use it directly (no LLM needed)
+    if (item.isStructured && item.title && (item.price || item.discountPercentage || item.discountValue)) {
+      console.log(`[dealExtractor] Using structured data for ${item.title} (no LLM needed)`);
+      
+      const now = new Date();
+      const startDate = item.startDate || now.toISOString();
+      let endDate = item.endDate;
+      
+      // Validate end date
+      if (!endDate || new Date(endDate) <= new Date(startDate) || new Date(endDate).getFullYear() < 2025) {
+        const fixedEnd = new Date(startDate);
+        fixedEnd.setDate(fixedEnd.getDate() + 60);
+        endDate = fixedEnd.toISOString();
+      }
+      
+      deals.push({
+        title: item.title,
+        description: item.description || `${item.title} at ${scrapeResult.merchantName}`,
+        category: scrapeResult.category || 'Shopping',
+        merchantName: scrapeResult.merchantName,
+        city: scrapeResult.city,
+        state: scrapeResult.state,
+        discountPercentage: item.discountPercentage || null,
+        discountValue: item.discountValue || null,
+        price: item.price || null,
+        startDate,
+        endDate,
+        sourceUrl: scrapeResult.url,
+        confidence: 0.85, // Higher confidence for structured data
+        requiresValidation: true,
+        extractionMethod: 'structured-scraper', // No LLM used
+      });
+      
+      continue; // Skip LLM extraction for structured items
+    }
+    
+    // Only use LLM for unstructured content
+    console.log(`[dealExtractor] Using LLM extraction for unstructured item: ${item.title}`);
     // Use raw HTML if available (more context), otherwise use extracted text
     const htmlSnippet = item.rawHtml && item.rawHtml.length > 50
       ? item.rawHtml
