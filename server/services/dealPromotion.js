@@ -517,10 +517,13 @@ const promoteIngestedDealsByIds = async (ids = []) => {
 
 const rejectIngestedDealsByIds = async (ids = []) => {
   if (!Array.isArray(ids) || ids.length === 0) {
+    console.log('[dealPromotion] rejectIngestedDealsByIds: No IDs provided');
     return { updated: 0 };
   }
 
-  const { rowCount } = await pool.query(
+  console.log(`[dealPromotion] Rejecting ${ids.length} deals:`, ids);
+
+  const result = await pool.query(
     `
       UPDATE ingested_deal_raw
       SET status = 'rejected'
@@ -530,7 +533,9 @@ const rejectIngestedDealsByIds = async (ids = []) => {
     [ids]
   );
 
-  return { updated: rowCount };
+  console.log(`[dealPromotion] Rejected ${result.rowCount} deals`);
+
+  return { updated: result.rowCount };
 };
 
 module.exports = {
