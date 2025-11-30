@@ -160,13 +160,24 @@ async function fetchDealSource(sourceConfig) {
   let extractedItems = [];
   if (selectors) {
     extractedItems = extractWithSelectors(fetchResult.html, selectors);
+    console.log(`[baseScraper] Found ${extractedItems.length} items with selectors for ${sourceConfig.id}`);
     
     // Filter by keywords if provided
     if (keywords && keywords.length > 0) {
+      const beforeFilter = extractedItems.length;
       extractedItems = extractedItems.filter(item => 
         containsDealKeywords(item.title + ' ' + item.description, keywords)
       );
+      console.log(`[baseScraper] Filtered to ${extractedItems.length} items (from ${beforeFilter}) matching keywords`);
     }
+  } else {
+    console.warn(`[baseScraper] No selectors provided for ${sourceConfig.id} - cannot extract structured content`);
+  }
+  
+  // If no items found, log a sample of the HTML for debugging
+  if (extractedItems.length === 0 && fetchResult.html) {
+    const sampleHtml = fetchResult.html.substring(0, 500);
+    console.warn(`[baseScraper] No items extracted from ${sourceConfig.id}. HTML sample: ${sampleHtml}...`);
   }
 
   return {
