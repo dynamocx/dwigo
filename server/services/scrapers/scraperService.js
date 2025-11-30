@@ -80,8 +80,8 @@ async function scrapeAllSources() {
       const result = await scrapeSource(source);
       results.push(result);
       
-      // Be polite - wait between sources
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Be polite - wait between sources to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 seconds between sources
     } catch (error) {
       console.error(`[scraperService] Error scraping ${source.id}:`, error);
       results.push({

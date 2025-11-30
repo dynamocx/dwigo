@@ -41,6 +41,8 @@ router.get('/pending', async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
 
+    console.log(`[admin/ingestion] Fetching pending rows (limit: ${limit})`);
+
     const { rows } = await pool.query(
       `
         SELECT r.*,
@@ -56,6 +58,8 @@ router.get('/pending', async (req, res) => {
       `,
       [limit]
     );
+
+    console.log(`[admin/ingestion] Found ${rows.length} pending rows`);
 
     // Also get stats on auto-rejected deals for context
     const { rows: rejectedStats } = await pool.query(
@@ -77,9 +81,13 @@ router.get('/pending', async (req, res) => {
     });
   } catch (error) {
     console.error('[admin/ingestion] pending fetch error', error);
+    console.error('[admin/ingestion] Error stack:', error.stack);
     res.status(500).json({
       data: [],
-      error: { message: 'Failed to load pending ingestion rows' },
+      error: { 
+        message: 'Failed to load pending ingestion rows',
+        details: error.message,
+      },
       meta: {},
     });
   }

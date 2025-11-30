@@ -37,7 +37,21 @@ async function callLLMForExtraction(messages) {
 
     return response.data;
   } catch (error) {
-    console.error('[dealExtractor] OpenAI API error:', error.response?.data || error.message);
+    const errorDetails = error.response?.data || {};
+    const errorCode = errorDetails.error?.code || error.response?.status;
+    const errorMessage = errorDetails.error?.message || error.message;
+    
+    console.error('[dealExtractor] OpenAI API error:', {
+      message: errorMessage,
+      code: errorCode,
+      status: error.response?.status,
+    });
+    
+    // Handle rate limiting with helpful error
+    if (errorCode === 'rate_limit_exceeded' || error.response?.status === 429) {
+      throw new Error('OpenAI API rate limit exceeded. Please wait a few minutes and try again. The scraper makes many API calls - consider reducing the number of sources or waiting between runs.');
+    }
+    
     throw error;
   }
 }
@@ -224,8 +238,8 @@ async function processScrapedContent(scrapeResult) {
       console.log(`[dealExtractor] Rejected item from ${scrapeResult.merchantName}: ${extracted.rejectionReason || 'No deal found'}`);
     }
 
-    // Be polite - small delay between extractions
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Be polite - longer delay between extractions to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds between extractions
   }
 
   return deals;
