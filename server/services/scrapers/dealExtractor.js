@@ -42,8 +42,14 @@ async function callLLMForExtraction(messages) {
   }
 }
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a data extraction assistant for a deals platform.
-Given a merchant name and HTML snippet from their website, extract deal information.
+const EXTRACTION_SYSTEM_PROMPT = `You are a data extraction assistant. Your ONLY job is to extract deal information from the provided HTML.
+
+CRITICAL RULES:
+1. The merchant name is ALREADY PROVIDED - use it exactly as given. DO NOT change it or invent a different name.
+2. ONLY extract information that is EXPLICITLY written in the HTML snippet below.
+3. DO NOT invent, infer, or generate any information not present in the HTML.
+4. If the HTML doesn't contain a clear deal/offer/promotion, return { "valid": false }.
+5. The merchant name in your response MUST match the merchant name provided to you.
 
 Return ONLY valid JSON with this structure:
 {
@@ -58,15 +64,15 @@ Return ONLY valid JSON with this structure:
   "rejectionReason": string | null
 }
 
-Rules:
-- Set "valid": false if no explicit offer, discount, or time-bound promotional language
-- Only extract information that is clearly stated in the HTML
-- Do NOT invent or infer deals that aren't explicitly mentioned
-- Dates must be in 2025 or later
-- If discount is mentioned, extract as discountPercentage (number) or discountValue (string like "$5 off")
-- If price is mentioned, extract as price (number)
+Extraction rules:
+- "valid": false if no explicit offer, discount, or promotional language in HTML
+- Extract ONLY what's written in the HTML - nothing else
+- Dates must be in 2025 or later (if date is in HTML but wrong year, use current date)
+- discountPercentage: number (e.g., 20 for "20% off")
+- discountValue: string (e.g., "$5 off", "Buy one get one")
+- price: number (e.g., 15.99 for "$15.99")
 
-Return { "valid": false, "rejectionReason": "..." } if no deal found.`;
+If no deal found in HTML, return: { "valid": false, "rejectionReason": "No deal found in provided HTML" }`;
 
 /**
  * Extract deal from HTML snippet using LLM
@@ -84,12 +90,19 @@ async function extractDealFromHtml(merchantName, city, state, htmlSnippet, sourc
     },
     {
       role: 'user',
-      content: `Extract deal information from this HTML snippet for ${merchantName} in ${city}, ${state}.
+      content: `MERCHANT NAME: ${merchantName}
+LOCATION: ${city}, ${state}
+SOURCE URL: ${sourceUrl}
+
+Extract deal information from this HTML snippet. The merchant is "${merchantName}" - use this exact name.
 
 HTML Snippet:
 ${htmlSnippet.substring(0, 3000)} ${htmlSnippet.length > 3000 ? '... (truncated)' : ''}
 
-Source URL: ${sourceUrl}
+IMPORTANT: 
+- The merchant name is "${merchantName}" - do not change it
+- Only extract information that is explicitly written in the HTML above
+- If no deal is mentioned in the HTML, return { "valid": false }
 
 Return JSON only.`,
     },
@@ -153,15 +166,19 @@ async function processScrapedContent(scrapeResult) {
   }
 
   for (const item of scrapeResult.extractedItems) {
-    // Combine title, description, and date for LLM extraction
-    const htmlSnippet = `
+    // Use raw HTML if available (more context), otherwise use extracted text
+    const htmlSnippet = item.rawHtml && item.rawHtml.length > 50
+      ? item.rawHtml
+      : `
       <div class="deal-item">
         ${item.title ? `<h3>${item.title}</h3>` : ''}
         ${item.date ? `<time>${item.date}</time>` : ''}
         ${item.description ? `<p>${item.description}</p>` : ''}
-        ${item.rawHtml ? item.rawHtml : ''}
       </div>
     `;
+    
+    // Log what we're sending to LLM for debugging
+    console.log(`[dealExtractor] Extracting from ${scrapeResult.merchantName}, HTML length: ${htmlSnippet.length}`);
 
     const extracted = await extractDealFromHtml(
       scrapeResult.merchantName,
@@ -172,11 +189,17 @@ async function processScrapedContent(scrapeResult) {
     );
 
     if (extracted.valid && extracted.title) {
+      // Validate merchant name matches (prevent LLM from inventing merchants)
+      const extractedMerchantName = extracted.merchantName || scrapeResult.merchantName;
+      if (extractedMerchantName.toLowerCase() !== scrapeResult.merchantName.toLowerCase()) {
+        console.warn(`[dealExtractor] Merchant name mismatch: LLM returned "${extractedMerchantName}" but source is "${scrapeResult.merchantName}" - using source name`);
+      }
+      
       deals.push({
         title: extracted.title,
         description: extracted.description || `${extracted.title} at ${scrapeResult.merchantName}`,
         category: scrapeResult.category || 'Shopping',
-        merchantName: scrapeResult.merchantName,
+        merchantName: scrapeResult.merchantName, // Always use source merchant name, never LLM's version
         city: scrapeResult.city,
         state: scrapeResult.state,
         discountPercentage: extracted.discountPercentage || null,

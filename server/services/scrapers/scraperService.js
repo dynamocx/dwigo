@@ -48,15 +48,21 @@ async function scrapeSource(sourceConfig) {
   // Extract deals from HTML
   const deals = await processScrapedContent(scrapeResult);
   
-  console.log(`[scraperService] Extracted ${deals.length} deals from ${sourceConfig.id}`);
+  // Validate all deals use the correct merchant name (never trust LLM's merchant name)
+  const validatedDeals = deals.map(deal => ({
+    ...deal,
+    merchantName: sourceConfig.merchantName, // Always use source config merchant name
+  }));
+  
+  console.log(`[scraperService] Extracted ${validatedDeals.length} deals from ${sourceConfig.id} (${sourceConfig.merchantName})`);
 
   return {
     sourceId: sourceConfig.id,
     merchantName: sourceConfig.merchantName,
     success: true,
-    deals,
+    deals: validatedDeals,
     itemCount: scrapeResult.itemCount || 0,
-    extractedCount: deals.length,
+    extractedCount: validatedDeals.length,
   };
 }
 
@@ -96,13 +102,21 @@ async function scrapeAllSources() {
 async function scrapeAndIngest() {
   const results = await scrapeAllSources();
   
-  // Collect all deals
+  // Collect all deals and validate merchant names
   const allDeals = [];
   for (const result of results) {
     if (result.success && result.deals) {
-      allDeals.push(...result.deals);
+      // Double-check merchant names match source config
+      const validated = result.deals.map(deal => ({
+        ...deal,
+        merchantName: result.merchantName, // Use source merchant name, never LLM's version
+      }));
+      allDeals.push(...validated);
     }
   }
+  
+  console.log(`[scraperService] Total deals collected: ${allDeals.length}`);
+  console.log(`[scraperService] Unique merchants: ${[...new Set(allDeals.map(d => d.merchantName))].join(', ')}`);
 
   if (allDeals.length === 0) {
     console.log('[scraperService] No deals extracted from any source');
