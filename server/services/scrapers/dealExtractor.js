@@ -161,9 +161,17 @@ Return JSON only.`,
 async function processScrapedContent(scrapeResult) {
   const deals = [];
   
-  if (!scrapeResult.success || !scrapeResult.extractedItems || scrapeResult.extractedItems.length === 0) {
+  if (!scrapeResult.success) {
+    console.warn(`[dealExtractor] Scrape failed for ${scrapeResult.merchantName || 'unknown'}`);
     return deals;
   }
+  
+  if (!scrapeResult.extractedItems || scrapeResult.extractedItems.length === 0) {
+    console.warn(`[dealExtractor] No items found for ${scrapeResult.merchantName} - skipping extraction to prevent fake deals`);
+    return deals; // CRITICAL: Don't call LLM if no items found - prevents invention
+  }
+  
+  console.log(`[dealExtractor] Processing ${scrapeResult.extractedItems.length} items from ${scrapeResult.merchantName}`);
 
   for (const item of scrapeResult.extractedItems) {
     // Use raw HTML if available (more context), otherwise use extracted text
