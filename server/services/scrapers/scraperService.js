@@ -170,10 +170,12 @@ async function scrapeAndIngest() {
   }));
 
   const payload = {
-    source: 'scraper:web',
+    source: 'scraper:web', // CRITICAL: This must be 'scraper:web' not 'ai:deal-fetching-agent'
     scope: 'mid-michigan-pilot',
     deals: ingestionDeals,
   };
+  
+  console.log(`[scraperService] Ingesting ${ingestionDeals.length} deals with source: ${payload.source}`);
 
   const ingestionResult = await processIngestionJob(payload);
 

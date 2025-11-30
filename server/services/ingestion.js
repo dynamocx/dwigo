@@ -102,6 +102,40 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
         const rawPayload = deal.rawPayload || deal.raw_payload || {};
         const normalizedPayload = deal.normalizedPayload || deal.normalized_payload || null;
         
+        // Validate and fix dates during ingestion (not just promotion)
+        const now = new Date();
+        let startDate = rawPayload.startDate || rawPayload.startsAt || normalizedPayload?.schedule?.rule?.startsAt || null;
+        let endDate = rawPayload.endDate || rawPayload.endsAt || normalizedPayload?.schedule?.rule?.endsAt || null;
+        
+        if (startDate) {
+          const parsedStart = new Date(startDate);
+          if (parsedStart < now || parsedStart.getFullYear() < 2025) {
+            console.warn(`[ingestion] Fixing invalid startDate during ingestion: ${startDate} -> ${now.toISOString()}`);
+            rawPayload.startDate = now.toISOString();
+            startDate = now.toISOString();
+          }
+        } else {
+          rawPayload.startDate = now.toISOString();
+          startDate = now.toISOString();
+        }
+        
+        if (endDate) {
+          const parsedEnd = new Date(endDate);
+          const parsedStart = new Date(startDate);
+          if (parsedEnd <= parsedStart || parsedEnd.getFullYear() < 2025) {
+            const fixedEnd = new Date(parsedStart);
+            fixedEnd.setDate(fixedEnd.getDate() + 60);
+            console.warn(`[ingestion] Fixing invalid endDate during ingestion: ${endDate} -> ${fixedEnd.toISOString()}`);
+            rawPayload.endDate = fixedEnd.toISOString();
+            endDate = fixedEnd.toISOString();
+          }
+        } else {
+          const defaultEnd = new Date(startDate);
+          defaultEnd.setDate(defaultEnd.getDate() + 60);
+          rawPayload.endDate = defaultEnd.toISOString();
+          endDate = defaultEnd.toISOString();
+        }
+        
         // Extract basic fields for quality check
         const fields = {
           title: normalizedPayload?.title || rawPayload.title || null,
@@ -121,11 +155,7 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
             rawPayload.dealPrice || 
             null,
           category: normalizedPayload?.category || rawPayload.category || null,
-          endDate: 
-            normalizedPayload?.schedule?.rule?.endsAt || 
-            rawPayload.endDate || 
-            rawPayload.endsAt || 
-            null,
+          endDate: endDate, // Use validated date
           terms: normalizedPayload?.terms || rawPayload.terms || null,
         };
         
