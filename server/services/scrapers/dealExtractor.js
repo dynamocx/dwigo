@@ -11,12 +11,15 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
 
 /**
- * Call OpenAI API for extraction
+ * Call OpenAI API for extraction with retry logic
  */
-async function callLLMForExtraction(messages) {
+async function callLLMForExtraction(messages, retryCount = 0) {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY not configured');
   }
+
+  const MAX_RETRIES = 3;
+  const BASE_DELAY = 2000; // 2 seconds
 
   try {
     const response = await axios.post(
@@ -41,13 +44,23 @@ async function callLLMForExtraction(messages) {
     const errorCode = errorDetails.error?.code || error.response?.status;
     const errorMessage = errorDetails.error?.message || error.message;
     
+    // Handle rate limiting with retry
+    if ((errorCode === 'rate_limit_exceeded' || error.response?.status === 429) && retryCount < MAX_RETRIES) {
+      const delay = BASE_DELAY * Math.pow(2, retryCount); // Exponential backoff: 2s, 4s, 8s
+      console.warn(`[dealExtractor] Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callLLMForExtraction(messages, retryCount + 1);
+    }
+    
     console.error('[dealExtractor] OpenAI API error:', {
       message: errorMessage,
       code: errorCode,
       status: error.response?.status,
+      retryCount,
     });
     
-    // Handle rate limiting with helpful error
+    // Handle rate limiting with helpful error (after max retries)
     if (errorCode === 'rate_limit_exceeded' || error.response?.status === 429) {
       throw new Error('OpenAI API rate limit exceeded. Please wait a few minutes and try again. The scraper makes many API calls - consider reducing the number of sources or waiting between runs.');
     }

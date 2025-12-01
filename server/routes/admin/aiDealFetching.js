@@ -196,7 +196,37 @@ router.post('/scrape-deals', async (req, res) => {
 
     console.log('[admin/ai] Starting web scraping deal discovery...');
 
-    const result = await scrapeAndIngest();
+    let result;
+    try {
+      result = await scrapeAndIngest();
+    } catch (scrapeError) {
+      console.error('[admin/ai] Scraping error details:', {
+        message: scrapeError.message,
+        stack: scrapeError.stack,
+        code: scrapeError.code,
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to scrape deals from web';
+      if (scrapeError.message.includes('ECONNREFUSED') || scrapeError.message.includes('Network Error')) {
+        errorMessage = 'Network error: Could not connect to target websites. This may be due to network restrictions or the websites being unavailable.';
+      } else if (scrapeError.message.includes('timeout')) {
+        errorMessage = 'Request timeout: The scraping operation took too long. Some websites may be slow or unresponsive.';
+      } else if (scrapeError.message.includes('ENOTFOUND') || scrapeError.message.includes('getaddrinfo')) {
+        errorMessage = 'DNS error: Could not resolve website addresses. Check your network connection.';
+      } else if (scrapeError.message) {
+        errorMessage = `Scraping failed: ${scrapeError.message}`;
+      }
+      
+      return res.status(500).json({
+        data: null,
+        error: { 
+          message: errorMessage,
+          details: scrapeError.message,
+        },
+        meta: {},
+      });
+    }
 
     res.json({
       data: {
@@ -214,7 +244,10 @@ router.post('/scrape-deals', async (req, res) => {
     console.error('[admin/ai] scrape-deals error', error);
     res.status(500).json({
       data: null,
-      error: { message: error.message || 'Failed to scrape deals' },
+      error: { 
+        message: error.message || 'Failed to scrape deals from web',
+        details: error.stack,
+      },
       meta: {},
     });
   }

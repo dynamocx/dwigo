@@ -6,6 +6,8 @@ services:
     plan: free
     buildCommand: cd server && npm install
     startCommand: cd server && npm start
+    # Health check: Configure in Render dashboard → Settings → Health Check Path: /health
+    # The /health endpoint returns 200 if healthy, 503 if unhealthy
     envVars:
       - key: NODE_ENV
         value: production

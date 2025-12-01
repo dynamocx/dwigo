@@ -65,9 +65,152 @@ if (process.env.ENABLE_SCHEDULER === 'true') {
   startScheduledJobs();
 }
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// Health check endpoints - comprehensive system status
+// /api/health - Full detailed health check
+// /health - Simple health check for load balancers (returns 200 if healthy, 503 if unhealthy)
+const performHealthCheck = async () => {
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    checks: {
+      database: { status: 'unknown', message: '' },
+      redis: { status: 'unknown', message: '' },
+      configuration: { status: 'unknown', message: '', details: {} },
+    },
+  };
+
+  // Check database connectivity
+  try {
+    const pool = require('./config/database');
+    const startTime = Date.now();
+    await pool.query('SELECT 1 as health_check');
+    const responseTime = Date.now() - startTime;
+    
+    health.checks.database = {
+      status: 'healthy',
+      message: 'Database connection successful',
+      responseTime: `${responseTime}ms`,
+    };
+  } catch (error) {
+    health.status = 'degraded';
+    health.checks.database = {
+      status: 'unhealthy',
+      message: `Database connection failed: ${error.message}`,
+      error: error.code || 'UNKNOWN',
+    };
+  }
+
+  // Check Redis connectivity (optional - not required for core functionality)
+  try {
+    const redis = require('./config/redis');
+    if (redis && redis.connection) {
+      const startTime = Date.now();
+      const result = await redis.connection.ping();
+      const responseTime = Date.now() - startTime;
+      
+      if (result === 'PONG') {
+        health.checks.redis = {
+          status: 'healthy',
+          message: 'Redis connection successful',
+          responseTime: `${responseTime}ms`,
+        };
+      } else {
+        health.checks.redis = {
+          status: 'unavailable',
+          message: 'Redis ping returned unexpected result',
+        };
+      }
+    } else {
+      health.checks.redis = {
+        status: 'not_configured',
+        message: 'Redis not configured (optional)',
+      };
+    }
+  } catch (error) {
+    // Redis is optional, so don't mark overall health as degraded
+    health.checks.redis = {
+      status: 'unavailable',
+      message: `Redis connection failed: ${error.message}`,
+      note: 'Redis is optional and does not affect core functionality',
+    };
+  }
+
+  // Check critical configuration
+  const configStatus = {
+    database: !!process.env.DATABASE_URL,
+    jwtSecret: !!process.env.JWT_SECRET,
+    adminToken: !!process.env.ADMIN_API_TOKEN,
+    openaiKey: !!process.env.OPENAI_API_KEY,
+    googlePlacesKey: !!process.env.GOOGLE_PLACES_API_KEY,
+  };
+
+  const missingCritical = [];
+  if (!configStatus.database) missingCritical.push('DATABASE_URL');
+  if (!configStatus.jwtSecret) missingCritical.push('JWT_SECRET');
+  if (!configStatus.adminToken) missingCritical.push('ADMIN_API_TOKEN');
+
+  if (missingCritical.length > 0) {
+    health.status = 'unhealthy';
+    health.checks.configuration = {
+      status: 'unhealthy',
+      message: `Missing critical configuration: ${missingCritical.join(', ')}`,
+      details: configStatus,
+    };
+  } else {
+    health.checks.configuration = {
+      status: 'healthy',
+      message: 'All critical configuration present',
+      details: {
+        ...configStatus,
+        // Don't expose actual keys, just whether they're set
+        openaiKey: configStatus.openaiKey ? 'configured' : 'not configured',
+        googlePlacesKey: configStatus.googlePlacesKey ? 'configured' : 'not configured',
+      },
+    };
+  }
+
+  // Determine overall status
+  const hasUnhealthy = Object.values(health.checks).some(
+    check => check.status === 'unhealthy'
+  );
+  const hasDegraded = Object.values(health.checks).some(
+    check => check.status === 'unavailable' || check.status === 'unhealthy'
+  );
+
+  if (hasUnhealthy) {
+    health.status = 'unhealthy';
+  } else if (hasDegraded) {
+    health.status = 'degraded';
+  }
+
+  // Return appropriate HTTP status code
+  const statusCode = health.status === 'healthy' ? 200 : 
+                     health.status === 'degraded' ? 200 : 503;
+
+  return { health, statusCode };
+};
+
+// Full health check endpoint
+app.get('/api/health', async (req, res) => {
+  const { health, statusCode } = await performHealthCheck();
+  res.status(statusCode).json(health);
+});
+
+// Simple health check for load balancers and monitoring
+app.get('/health', async (req, res) => {
+  const { health, statusCode } = await performHealthCheck();
+  
+  // For simple health checks, just return status
+  if (req.query.detailed === 'true') {
+    res.status(statusCode).json(health);
+  } else {
+    res.status(statusCode).json({
+      status: health.status,
+      timestamp: health.timestamp,
+    });
+  }
 });
 
 // Error handling middleware

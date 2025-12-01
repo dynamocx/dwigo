@@ -25,6 +25,7 @@ async function fetchStaticHtml(url, timeout = 10000) {
       },
       timeout,
       maxRedirects: 5,
+      validateStatus: (status) => status < 500, // Accept 4xx but not 5xx
     });
 
     return {
@@ -34,11 +35,28 @@ async function fetchStaticHtml(url, timeout = 10000) {
       statusCode: response.status,
     };
   } catch (error) {
-    console.error(`[baseScraper] Static fetch error for ${url}:`, error.message);
+    // Provide more detailed error information
+    const errorDetails = {
+      message: error.message,
+      code: error.code,
+      url,
+    };
+    
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      errorDetails.message = `Network error: Could not connect to ${url}. ${error.message}`;
+    } else if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+      errorDetails.message = `Request timeout: ${url} did not respond within ${timeout}ms`;
+    } else if (error.response) {
+      errorDetails.message = `HTTP ${error.response.status}: ${error.response.statusText}`;
+      errorDetails.statusCode = error.response.status;
+    }
+    
+    console.error(`[baseScraper] Static fetch error for ${url}:`, errorDetails);
     return {
       success: false,
-      error: error.message,
+      error: errorDetails.message,
       url,
+      errorCode: error.code,
     };
   }
 }
@@ -83,13 +101,36 @@ async function fetchRenderedHtml(url, timeout = 30000) {
     };
   } catch (error) {
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.warn('[baseScraper] Error closing browser:', closeError.message);
+      }
     }
-    console.error(`[baseScraper] Rendered fetch error for ${url}:`, error.message);
+    
+    // Provide more detailed error information
+    const errorDetails = {
+      message: error.message,
+      code: error.code || error.name,
+      url,
+    };
+    
+    if (error.message.includes('net::ERR_NAME_NOT_RESOLVED') || error.message.includes('getaddrinfo')) {
+      errorDetails.message = `DNS error: Could not resolve ${url}. Check the URL is correct.`;
+    } else if (error.message.includes('timeout') || error.message.includes('Navigation timeout')) {
+      errorDetails.message = `Navigation timeout: ${url} did not load within ${timeout}ms`;
+    } else if (error.message.includes('net::ERR_CONNECTION_REFUSED')) {
+      errorDetails.message = `Connection refused: ${url} is not accepting connections`;
+    } else if (error.message.includes('Playwright')) {
+      errorDetails.message = `Playwright error: ${error.message}. Playwright may not be installed or configured correctly.`;
+    }
+    
+    console.error(`[baseScraper] Rendered fetch error for ${url}:`, errorDetails);
     return {
       success: false,
-      error: error.message,
+      error: errorDetails.message,
       url,
+      errorCode: error.code || error.name,
     };
   }
 }

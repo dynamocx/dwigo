@@ -4,22 +4,23 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Collapse,
   Divider,
-  Grid,
   IconButton,
   Stack,
   Typography,
   Tabs,
   Tab,
   Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Checkbox,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -34,54 +35,6 @@ import {
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
 import DealEntryForm from './DealEntryForm';
-
-const formatDate = (value: string | null | undefined) => {
-  if (!value) return '—';
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
-};
-
-const PayloadViewer: React.FC<{ title: string; payload?: Record<string, unknown> | null }> = ({
-  title,
-  payload,
-}) => {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!payload || Object.keys(payload).length === 0) {
-    return null;
-  }
-
-  return (
-    <Box>
-      <Button
-        size="small"
-        startIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        onClick={() => setExpanded((prev) => !prev)}
-      >
-        {expanded ? `Hide ${title}` : `Show ${title}`}
-      </Button>
-      <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <Box
-          component="pre"
-          sx={{
-            mt: 1,
-            p: 1.5,
-            borderRadius: 1,
-            bgcolor: 'grey.100',
-            fontSize: 12,
-            maxHeight: 240,
-            overflow: 'auto',
-          }}
-        >
-          {JSON.stringify(payload, null, 2)}
-        </Box>
-      </Collapse>
-    </Box>
-  );
-};
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -99,6 +52,7 @@ const IngestionReviewPage = () => {
   const queryClient = useQueryClient();
   const [limit] = useState(50);
   const [tabValue, setTabValue] = useState(0); // 0 = Auto-Seeding, 1 = Add Deals
+  const [selectedDeals, setSelectedDeals] = useState<number[]>([]);
 
   const pendingQuery = useQuery({
     queryKey: ['admin-ingestion-pending', limit],
@@ -285,18 +239,18 @@ const IngestionReviewPage = () => {
               <Button
                 variant="outlined"
                 onClick={() => seedMidMichiganMutation.mutate()}
-                disabled={seedMidMichiganMutation.isLoading}
+                disabled={seedMidMichiganMutation.isPending}
                 size="large"
               >
-                {seedMidMichiganMutation.isLoading ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
+                {seedMidMichiganMutation.isPending ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
               </Button>
               <Button
                 variant="outlined"
                 onClick={() => seedMutation.mutate()}
-                disabled={seedMutation.isLoading}
+                disabled={seedMutation.isPending}
                 size="large"
               >
-                {seedMutation.isLoading ? 'Seeding...' : 'Seed Test Deals'}
+                {seedMutation.isPending ? 'Seeding...' : 'Seed Test Deals'}
               </Button>
             </Stack>
           </Stack>
@@ -315,204 +269,223 @@ const IngestionReviewPage = () => {
 
       <Divider />
 
-      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-        Pending Deals ({rows.length})
-      </Typography>
+      <Stack spacing={2}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Pending Deals ({rows.length})
+          </Typography>
+          {selectedDeals.length > 0 && (
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={() => {
+                  promoteMutation.mutate(selectedDeals);
+                  setSelectedDeals([]);
+                }}
+                disabled={promoteMutation.isPending}
+              >
+                Promote Selected ({selectedDeals.length})
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={() => {
+                  rejectMutation.mutate(selectedDeals);
+                  setSelectedDeals([]);
+                }}
+                disabled={rejectMutation.isPending}
+              >
+                Reject Selected ({selectedDeals.length})
+              </Button>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => setSelectedDeals([])}
+              >
+                Clear Selection
+              </Button>
+            </Stack>
+          )}
+        </Stack>
 
-      <Grid container spacing={2}>
-        {rows.map((row) => {
-          const confidence = row.confidence != null ? `${(Number(row.confidence) * 100).toFixed(0)}%` : '—';
-          const quality = assessDealQuality(row.normalized_payload, row.raw_payload);
-          const qualityScore = `${(quality.score * 100).toFixed(0)}%`;
-          const deal = getDealDetails(row);
-          
-          // Format location
-          const locationParts = [
-            deal.address,
-            deal.city,
-            deal.state,
-            deal.postalCode,
-          ].filter(Boolean);
-          const location = locationParts.length > 0 ? locationParts.join(', ') : 'Location not specified';
-          
-          // Format discount/price info
-          const discountInfo = deal.discount?.value 
-            ? `${deal.discount.value}% off`
-            : deal.discountPercentage 
-            ? `${deal.discountPercentage}% off`
-            : null;
-          
-          const priceInfo = deal.price?.amount 
-            ? `$${deal.price.amount}`
-            : deal.priceAmount 
-            ? `$${deal.priceAmount}`
-            : null;
-          
-          // Format date range
-          const dateRange = deal.startDate && deal.endDate
-            ? `${new Date(deal.startDate).toLocaleDateString()} - ${new Date(deal.endDate).toLocaleDateString()}`
-            : deal.startDate
-            ? `Starts: ${new Date(deal.startDate).toLocaleDateString()}`
-            : null;
-          
-          return (
-            <Grid item xs={12} key={row.id}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Stack spacing={2}>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        #{row.id} · {row.merchant_alias ?? 'Unmatched Merchant'}
-                      </Typography>
-                      <Chip size="small" label={`Confidence: ${confidence}`} />
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={row.job_source ? `Source: ${row.job_source}` : 'Source: unknown'}
-                      />
-                      <Chip
-                        size="small"
-                        color={quality.isValid ? 'success' : 'warning'}
-                        label={`Quality: ${qualityScore}`}
-                      />
-                      {deal.category && (
-                        <Chip size="small" label={deal.category} color="primary" variant="outlined" />
-                      )}
-                    </Stack>
-
-                    {/* Deal Title and Description */}
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-                        {deal.title}
-                      </Typography>
-                      {deal.description && (
-                        <Typography variant="body2" color="text.secondary">
-                          {deal.description}
+        {rows.length === 0 ? (
+          <Alert severity="info">
+            No pending deals. Use the buttons above to fetch or seed deals.
+          </Alert>
+        ) : (
+          <TableContainer component={Paper} variant="outlined">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" width={50}>
+                    <Checkbox
+                      indeterminate={selectedDeals.length > 0 && selectedDeals.length < rows.length}
+                      checked={rows.length > 0 && selectedDeals.length === rows.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDeals(rows.map((r) => r.id));
+                        } else {
+                          setSelectedDeals([]);
+                        }
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell width={80}>ID</TableCell>
+                  <TableCell width={150}>Merchant</TableCell>
+                  <TableCell>Title</TableCell>
+                  <TableCell width={200}>Location</TableCell>
+                  <TableCell width={120}>Deal Info</TableCell>
+                  <TableCell width={150}>Dates</TableCell>
+                  <TableCell width={100}>Source</TableCell>
+                  <TableCell width={100}>Quality</TableCell>
+                  <TableCell width={150}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((row) => {
+                  const confidence = row.confidence != null ? `${(Number(row.confidence) * 100).toFixed(0)}%` : '—';
+                  const quality = assessDealQuality(row.normalized_payload, row.raw_payload);
+                  const qualityScore = `${(quality.score * 100).toFixed(0)}%`;
+                  const deal = getDealDetails(row);
+                  const isSelected = selectedDeals.includes(row.id);
+                  
+                  // Format location
+                  const locationParts = [
+                    deal.city,
+                    deal.state,
+                  ].filter(Boolean);
+                  const location = locationParts.length > 0 ? locationParts.join(', ') : '—';
+                  
+                  // Format discount/price info
+                  const discountInfo = deal.discount?.value 
+                    ? `${deal.discount.value}% off`
+                    : deal.discountPercentage 
+                    ? `${deal.discountPercentage}% off`
+                    : null;
+                  
+                  const priceInfo = deal.price?.amount 
+                    ? `$${deal.price.amount}`
+                    : deal.priceAmount 
+                    ? `$${deal.priceAmount}`
+                    : null;
+                  
+                  const dealInfo = discountInfo || priceInfo || '—';
+                  
+                  // Format date range
+                  const dateRange = deal.startDate && deal.endDate
+                    ? `${new Date(deal.startDate).toLocaleDateString()} - ${new Date(deal.endDate).toLocaleDateString()}`
+                    : deal.startDate
+                    ? `Starts: ${new Date(deal.startDate).toLocaleDateString()}`
+                    : '—';
+                  
+                  return (
+                    <TableRow key={row.id} selected={isSelected} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedDeals([...selectedDeals, row.id]);
+                            } else {
+                              setSelectedDeals(selectedDeals.filter((id) => id !== row.id));
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>#{row.id}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {row.merchant_alias ?? '—'}
                         </Typography>
-                      )}
-                    </Box>
-
-                    <Divider />
-
-                    {/* Deal Details */}
-                    <Stack spacing={1}>
-                      <Stack direction="row" spacing={2} flexWrap="wrap">
-                        {discountInfo && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              Discount
-                            </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
-                              {discountInfo}
-                            </Typography>
-                          </Box>
-                        )}
-                        {priceInfo && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              Price
-                            </Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {priceInfo}
-                            </Typography>
-                          </Box>
-                        )}
-                        {dateRange && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary" display="block">
-                              Valid Dates
-                            </Typography>
-                            <Typography variant="body2">
-                              {dateRange}
-                            </Typography>
-                          </Box>
-                        )}
-                      </Stack>
-
-                      {/* Location */}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Location
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {deal.title}
                         </Typography>
-                        <Typography variant="body2">
-                          {location}
-                        </Typography>
-                      </Box>
-
-                      {deal.sourceUrl && (
-                        <Box>
+                        {deal.description && (
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                            {deal.description.substring(0, 100)}
+                            {deal.description.length > 100 ? '...' : ''}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{location}</Typography>
+                        {deal.address && (
                           <Typography variant="caption" color="text.secondary" display="block">
-                            Source
-                          </Typography>
-                          <Typography 
-                            variant="body2" 
-                            component="a" 
-                            href={deal.sourceUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            sx={{ color: 'primary.main', textDecoration: 'none' }}
-                          >
-                            {deal.sourceUrl}
-                          </Typography>
-                        </Box>
-                      )}
-                    </Stack>
-
-                    {!quality.isValid && (
-                      <Alert severity="warning" sx={{ mt: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                          Quality Issues Detected
-                        </Typography>
-                        <Typography variant="body2" component="div">
-                          <strong>Issues:</strong> {quality.reasons.join(', ')}
-                        </Typography>
-                        {quality.recommendations.length > 0 && (
-                          <Typography variant="body2" component="div" sx={{ mt: 1 }}>
-                            <strong>Recommendations:</strong> {quality.recommendations.join(', ')}
+                            {deal.address}
                           </Typography>
                         )}
-                      </Alert>
-                    )}
-
-                    <Divider />
-
-                    <Typography variant="body2" color="text.secondary">
-                      Created {formatDate(row.created_at)}
-                      {row.job_started_at ? ` · Job started ${formatDate(row.job_started_at)}` : ''}
-                    </Typography>
-
-                    <Stack spacing={1}>
-                      <PayloadViewer title="Normalized Payload" payload={row.normalized_payload ?? undefined} />
-                      <PayloadViewer title="Raw Payload" payload={row.raw_payload ?? undefined} />
-                    </Stack>
-
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        onClick={() => promoteMutation.mutate([row.id])}
-                        disabled={promoteMutation.isLoading}
-                      >
-                        Promote
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        onClick={() => rejectMutation.mutate([row.id])}
-                        disabled={rejectMutation.isLoading}
-                      >
-                        Reject
-                      </Button>
-                    </Stack>
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          );
-        })}
-      </Grid>
+                      </TableCell>
+                      <TableCell>
+                        {dealInfo !== '—' ? (
+                          <Chip
+                            size="small"
+                            label={dealInfo}
+                            color={discountInfo ? 'success' : 'default'}
+                            variant={discountInfo ? 'filled' : 'outlined'}
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">—</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontSize={12}>
+                          {dateRange}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={row.job_source ? row.job_source.split(':')[0] : 'unknown'}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={qualityScore}
+                          color={quality.isValid ? 'success' : 'warning'}
+                        />
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          {confidence}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5}>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="small"
+                            onClick={() => promoteMutation.mutate([row.id])}
+                            disabled={promoteMutation.isPending}
+                            sx={{ minWidth: 70 }}
+                          >
+                            Promote
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            size="small"
+                            onClick={() => rejectMutation.mutate([row.id])}
+                            disabled={rejectMutation.isPending}
+                            sx={{ minWidth: 60 }}
+                          >
+                            Reject
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Stack>
     </Stack>
   );
 };

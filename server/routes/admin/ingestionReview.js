@@ -43,7 +43,23 @@ router.get('/pending', async (req, res) => {
 
     console.log(`[admin/ingestion] Fetching pending rows (limit: ${limit})`);
 
-    const { rows } = await pool.query(
+    // Test database connection first
+    try {
+      await pool.query('SELECT 1');
+    } catch (connError) {
+      console.error('[admin/ingestion] Database connection test failed:', connError.message);
+      return res.status(500).json({
+        data: [],
+        error: { 
+          message: 'Database connection failed. Please check database configuration.',
+          details: connError.message,
+        },
+        meta: {},
+      });
+    }
+
+    // Add timeout to query (30 seconds)
+    const queryPromise = pool.query(
       `
         SELECT r.*,
                j.source AS job_source,
@@ -59,10 +75,25 @@ router.get('/pending', async (req, res) => {
       [limit]
     );
 
+    // Add timeout wrapper
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Query timeout after 30 seconds')), 30000);
+    });
+
+    let rows;
+    try {
+      const result = await Promise.race([queryPromise, timeoutPromise]);
+      rows = result.rows;
+    } catch (queryError) {
+      // If timeout promise wins, queryError will be the timeout error
+      // If query fails, it will be the actual query error
+      throw queryError;
+    }
+
     console.log(`[admin/ingestion] Found ${rows.length} pending rows`);
 
-    // Also get stats on auto-rejected deals for context
-    const { rows: rejectedStats } = await pool.query(
+    // Also get stats on auto-rejected deals for context (with timeout)
+    const statsPromise = pool.query(
       `
         SELECT COUNT(*) as count
         FROM ingested_deal_raw
@@ -70,6 +101,18 @@ router.get('/pending', async (req, res) => {
           AND created_at > NOW() - INTERVAL '7 days'
       `
     );
+
+    const statsTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Stats query timeout')), 5000);
+    });
+
+    let rejectedStats = [{ count: 0 }];
+    try {
+      const statsResult = await Promise.race([statsPromise, statsTimeout]);
+      rejectedStats = statsResult.rows;
+    } catch (statsError) {
+      console.warn('[admin/ingestion] Stats query failed or timed out:', statsError.message);
+    }
 
     res.json({
       data: rows,
@@ -82,10 +125,21 @@ router.get('/pending', async (req, res) => {
   } catch (error) {
     console.error('[admin/ingestion] pending fetch error', error);
     console.error('[admin/ingestion] Error stack:', error.stack);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to load pending ingestion rows';
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Query timed out. There may be too many pending rows. Try reducing the limit or clearing old rows.';
+    } else if (error.message.includes('connection')) {
+      errorMessage = 'Database connection error. Please try again.';
+    } else if (error.message) {
+      errorMessage = `Database error: ${error.message}`;
+    }
+    
     res.status(500).json({
       data: [],
       error: { 
-        message: 'Failed to load pending ingestion rows',
+        message: errorMessage,
         details: error.message,
       },
       meta: {},
