@@ -8,7 +8,17 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { chromium } = require('playwright');
+
+// Playwright is optional - only needed for renderedHtml mode
+let chromium = null;
+try {
+  const playwright = require('playwright');
+  chromium = playwright.chromium;
+  console.log('[baseScraper] Playwright loaded successfully');
+} catch (error) {
+  console.warn('[baseScraper] Playwright not available:', error.message);
+  console.warn('[baseScraper] Rendered HTML scraping will fail. Install with: npm install playwright && npx playwright install chromium');
+}
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -67,6 +77,11 @@ async function fetchStaticHtml(url, timeout = 10000) {
 async function fetchRenderedHtml(url, timeout = 30000) {
   let browser = null;
   try {
+    // Check if Playwright is available
+    if (!chromium) {
+      throw new Error('Playwright chromium not available. Run: npm install playwright && npx playwright install chromium');
+    }
+    
     browser = await chromium.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],

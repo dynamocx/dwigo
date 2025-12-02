@@ -100,28 +100,62 @@ async function scrapeAllSources() {
  * Scrape sources and ingest deals
  */
 async function scrapeAndIngest() {
+  console.log('[scraperService] Starting scrapeAndIngest...');
+  const sources = loadDealSources();
+  console.log(`[scraperService] Loaded ${sources.length} deal sources`);
+  
+  if (sources.length === 0) {
+    console.warn('[scraperService] No deal sources configured! Check server/config/dealSources.json');
+    return {
+      success: false,
+      error: 'No deal sources configured',
+      sourcesScraped: 0,
+      dealsExtracted: 0,
+      dealsIngested: 0,
+      results: [],
+    };
+  }
+  
   const results = await scrapeAllSources();
+  
+  // Log detailed results
+  console.log(`[scraperService] Scraping completed. Results:`, results.map(r => ({
+    sourceId: r.sourceId,
+    success: r.success,
+    dealsCount: r.deals?.length || 0,
+    error: r.error,
+  })));
   
   // Collect all deals and validate merchant names
   const allDeals = [];
   for (const result of results) {
-    if (result.success && result.deals) {
+    if (result.success && result.deals && result.deals.length > 0) {
       // Double-check merchant names match source config
       const validated = result.deals.map(deal => ({
         ...deal,
         merchantName: result.merchantName, // Use source merchant name, never LLM's version
       }));
       allDeals.push(...validated);
+      console.log(`[scraperService] Added ${validated.length} deals from ${result.sourceId}`);
+    } else {
+      console.warn(`[scraperService] Skipping ${result.sourceId}: success=${result.success}, deals=${result.deals?.length || 0}, error=${result.error || 'none'}`);
     }
   }
   
   console.log(`[scraperService] Total deals collected: ${allDeals.length}`);
-  console.log(`[scraperService] Unique merchants: ${[...new Set(allDeals.map(d => d.merchantName))].join(', ')}`);
+  if (allDeals.length > 0) {
+    console.log(`[scraperService] Unique merchants: ${[...new Set(allDeals.map(d => d.merchantName))].join(', ')}`);
+  }
 
   if (allDeals.length === 0) {
-    console.log('[scraperService] No deals extracted from any source');
+    console.warn('[scraperService] No deals extracted from any source. This could mean:');
+    console.warn('[scraperService] 1. Websites are blocking requests');
+    console.warn('[scraperService] 2. CSS selectors don\'t match the website structure');
+    console.warn('[scraperService] 3. Playwright not installed (for renderedHtml mode)');
+    console.warn('[scraperService] 4. Network connectivity issues');
     return {
-      success: true,
+      success: false,
+      error: 'No deals extracted from any source. Check server logs for details.',
       sourcesScraped: results.length,
       dealsExtracted: 0,
       dealsIngested: 0,
@@ -176,6 +210,13 @@ async function scrapeAndIngest() {
   };
   
   console.log(`[scraperService] Ingesting ${ingestionDeals.length} deals with source: ${payload.source}`);
+  console.log(`[scraperService] Payload source verification: ${payload.source} (should be 'scraper:web')`);
+  
+  // Double-check source is correct before ingestion
+  if (payload.source !== 'scraper:web') {
+    console.error(`[scraperService] CRITICAL ERROR: Source is '${payload.source}' but should be 'scraper:web'!`);
+    throw new Error(`Invalid source: ${payload.source}. Expected 'scraper:web'`);
+  }
 
   const ingestionResult = await processIngestionJob(payload);
 
