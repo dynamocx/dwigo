@@ -196,8 +196,43 @@ const IngestionReviewPage = () => {
       ) : null}
 
       {scrapeMutation.isSuccess && scrapeMutation.data?.data ? (
-        <Alert severity="success" onClose={() => scrapeMutation.reset()}>
-          Web Scraping completed! Scraped {scrapeMutation.data.data.sourcesScraped} sources, extracted {scrapeMutation.data.data.dealsExtracted} deals. They should appear below shortly.
+        <Alert 
+          severity={scrapeMutation.data.data.dealsExtracted === 0 ? 'warning' : 'success'} 
+          onClose={() => scrapeMutation.reset()}
+        >
+          {scrapeMutation.data.data.dealsExtracted === 0 ? (
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                Web Scraping completed but found 0 deals from {scrapeMutation.data.data.sourcesScraped} sources.
+              </Typography>
+              {(scrapeMutation.data.data as any).sourceDetails && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" display="block" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Source Details:
+                  </Typography>
+                  {(scrapeMutation.data.data as any).sourceDetails.map((source: any, idx: number) => (
+                    <Typography key={idx} variant="caption" display="block" sx={{ fontSize: '0.75rem' }}>
+                      • {source.merchantName}: {source.success ? `${source.itemsFound} items found, ${source.dealsFound} deals extracted` : `Failed: ${source.error || 'Unknown error'}`}
+                    </Typography>
+                  ))}
+                </Box>
+              )}
+              {(scrapeMutation.data.data as any).troubleshooting && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" display="block" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Possible reasons:
+                  </Typography>
+                  <Typography component="ul" variant="caption" sx={{ pl: 2, m: 0 }}>
+                    {(scrapeMutation.data.data as any).troubleshooting.possibleReasons.map((reason: string, idx: number) => (
+                      <li key={idx}>{reason}</li>
+                    ))}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            `Web Scraping completed! Scraped ${scrapeMutation.data.data.sourcesScraped} sources, extracted ${scrapeMutation.data.data.dealsExtracted} deals. They should appear below shortly.`
+          )}
         </Alert>
       ) : null}
 

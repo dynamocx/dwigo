@@ -249,14 +249,42 @@ router.post('/scrape-deals', async (req, res) => {
       });
     }
 
+    // Build detailed summary of what happened
+    const sourceSummary = result.results?.map(r => ({
+      sourceId: r.sourceId,
+      merchantName: r.merchantName,
+      success: r.success,
+      dealsFound: r.deals?.length || 0,
+      itemsFound: r.itemCount || 0,
+      error: r.error || null,
+    })) || [];
+
     res.json({
       data: {
-        message: 'Web scraping completed',
+        message: result.dealsExtracted === 0 
+          ? 'Web scraping completed but no deals were found. Check source details below.'
+          : 'Web scraping completed',
         sourcesScraped: result.sourcesScraped,
         dealsExtracted: result.dealsExtracted,
         dealsIngested: result.dealsIngested,
         jobId: result.jobId,
         stats: result.stats,
+        sourceDetails: sourceSummary, // Add detailed breakdown
+        troubleshooting: result.dealsExtracted === 0 ? {
+          possibleReasons: [
+            'CSS selectors may not match the website structure',
+            'Websites may be blocking automated requests',
+            'Playwright may not be installed (for renderedHtml mode)',
+            'No deals currently available on the target websites',
+            'Keywords filter may be too restrictive',
+          ],
+          nextSteps: [
+            'Check server logs for detailed error messages',
+            'Verify CSS selectors match the website structure',
+            'Test URLs manually in a browser',
+            'Check if websites require authentication or have anti-bot protection',
+          ],
+        } : null,
       },
       error: null,
       meta: {},
