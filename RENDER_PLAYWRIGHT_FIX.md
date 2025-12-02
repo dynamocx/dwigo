@@ -13,7 +13,10 @@ Build is failing with: `su: Authentication failure` when trying to install Playw
    ```
    cd server && npm install && npx playwright install chromium
    ```
-4. **Important**: Make sure there's NO `--with-deps` flag
+4. **Important**: 
+   - Make sure there's NO `--with-deps` flag
+   - Remove any `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` variables (not needed)
+   - Remove the `|| echo` fallback (we handle that in code)
 5. Click **Save Changes**
 6. Go to **Manual Deploy** → **Clear build cache & deploy**
 
