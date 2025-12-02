@@ -226,22 +226,33 @@ app.get('*', (req, res) => {
 });
 
 // Verify Playwright browsers on startup (if Playwright is used)
-if (process.env.NODE_ENV === 'production') {
-  try {
-    const playwright = require('playwright');
-    // Try to check if browsers are installed by attempting to get executable path
-    playwright.chromium.executablePath().then((path) => {
-      if (path) {
-        console.log(`[Playwright] Chromium found at: ${path}`);
+// Run this asynchronously so it doesn't block server startup
+(async () => {
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const playwright = require('playwright');
+      if (playwright && playwright.chromium) {
+        // Try to get executable path - this will fail if browsers aren't installed
+        try {
+          const executablePath = await playwright.chromium.executablePath();
+          if (executablePath) {
+            console.log(`[Playwright] ✅ Chromium browsers installed at: ${executablePath}`);
+          } else {
+            console.warn('[Playwright] ⚠️  Chromium executable path not found - browsers may not be installed');
+          }
+        } catch (pathError) {
+          console.warn('[Playwright] ⚠️  Browser verification failed:', pathError.message);
+          console.warn('[Playwright] ⚠️  RenderedHtml sources will fail. To fix: npx playwright install chromium');
+        }
       }
-    }).catch((err) => {
-      console.warn('[Playwright] Browser verification failed - browsers may not be installed:', err.message);
-      console.warn('[Playwright] This is OK for staticHtml sources, but renderedHtml sources will fail');
-    });
-  } catch (error) {
-    // Playwright not installed - that's fine
+    } catch (error) {
+      // Playwright npm package not installed - that's fine, we have fallback
+      console.log('[Playwright] Package not available (optional)');
+    }
   }
-}
+})().catch(() => {
+  // Ignore errors in verification - don't block startup
+});
 
 app.listen(PORT, () => {
   console.log(`DWIGO Server running on port ${PORT}`);
