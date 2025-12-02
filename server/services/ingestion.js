@@ -161,16 +161,57 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
         
         const qualityAssessment = assessDealQuality(fields, rawPayload, normalizedPayload);
         
+        // Merchant validation for AI-generated deals (if enabled)
+        let merchantValidation = null;
+        let shouldRejectMerchant = false;
+        if (process.env.ENABLE_MERCHANT_VALIDATION === 'true' && 
+            process.env.GOOGLE_PLACES_API_KEY &&
+            (job.source === 'ai:deal-fetching-agent' || deal.requiresValidation)) {
+          try {
+            const { validateMerchant, shouldRejectMerchant: checkReject } = require('./merchantValidation');
+            const merchantInfo = {
+              name: deal.merchantAlias || deal.merchant_alias || rawPayload.merchantName || rawPayload.businessName || '',
+              city: normalizedPayload?.location?.city || rawPayload.city || '',
+              state: normalizedPayload?.location?.state || rawPayload.state || '',
+              address: rawPayload.address || '',
+              latitude: normalizedPayload?.location?.latitude || rawPayload.latitude,
+              longitude: normalizedPayload?.location?.longitude || rawPayload.longitude,
+            };
+            
+            merchantValidation = await validateMerchant(merchantInfo);
+            const rejectionCheck = checkReject(merchantValidation);
+            shouldRejectMerchant = rejectionCheck.shouldReject;
+            
+            if (shouldRejectMerchant) {
+              console.warn(
+                `[ingestion] Merchant validation failed for "${merchantInfo.name}": ${rejectionCheck.reason}`
+              );
+            }
+          } catch (validationError) {
+            console.warn(`[ingestion] Merchant validation error: ${validationError.message}`);
+            // Don't reject on validation errors, just log
+          }
+        }
+        
         // Debug logging
-        if (qualityAssessment.shouldAutoReject) {
+        if (qualityAssessment.shouldAutoReject || shouldRejectMerchant) {
           console.log(
-            `[ingestion] Quality check: Deal "${fields.title || 'Untitled'}" scored ${(qualityAssessment.score * 100).toFixed(0)}% - will auto-reject`
+            `[ingestion] Quality check: Deal "${fields.title || 'Untitled'}" scored ${(qualityAssessment.score * 100).toFixed(0)}% - ${shouldRejectMerchant ? 'merchant validation failed' : 'will auto-reject'}`
           );
         }
         
-        // Auto-reject deals below quality threshold
-        if (qualityAssessment.shouldAutoReject) {
-          // Insert as rejected with quality reasons
+        // Auto-reject deals below quality threshold OR failed merchant validation
+        if (qualityAssessment.shouldAutoReject || shouldRejectMerchant) {
+          // Insert as rejected with quality/merchant validation reasons
+          const rejectionReason = shouldRejectMerchant
+            ? `Merchant validation failed: ${merchantValidation?.reason || 'Merchant not found'}`
+            : `Quality ${(qualityAssessment.score * 100).toFixed(0)}% < ${(AUTO_REJECT_QUALITY_SCORE * 100).toFixed(0)}%. Issues: ${qualityAssessment.reasons.slice(0, 3).join(', ')}`;
+          
+          // Add merchant validation to normalized payload if available
+          const rejectedNormalizedPayload = merchantValidation
+            ? { ...normalizedPayload, merchantValidation, rejectionReason }
+            : normalizedPayload;
+          
           await client.query(
             `
               INSERT INTO ingested_deal_raw (
@@ -188,14 +229,14 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
               job.id,
               deal.merchantAlias || deal.merchant_alias || null,
               rawPayload,
-              normalizedPayload,
+              rejectedNormalizedPayload,
               null,
               deal.confidence != null ? Number(deal.confidence) : null,
             ]
           );
           
           // Log rejection reason (truncate if needed)
-          const rejectionMessage = `Auto-rejected: Quality ${(qualityAssessment.score * 100).toFixed(0)}% < ${(AUTO_REJECT_QUALITY_SCORE * 100).toFixed(0)}%. Issues: ${qualityAssessment.reasons.slice(0, 3).join(', ')}`;
+          const rejectionMessage = `Auto-rejected: ${rejectionReason}`;
           await recordIngestionError(
             client,
             job.id,

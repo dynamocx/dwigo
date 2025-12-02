@@ -448,22 +448,56 @@ async function discoverDealsForPilotLocations(options = {}) {
         futureDate.setDate(futureDate.getDate() + 60); // 60 days from now
         const futureDateStr = futureDate.toISOString().split('T')[0];
         
+        // First, try to find real businesses using Google Places API (if available)
+        let verifiedBusinesses = [];
+        if (process.env.GOOGLE_PLACES_API_KEY) {
+          try {
+            const { validateMerchant } = require('../merchantValidation');
+            // Search for businesses in this category and location
+            const searchQuery = `${category} ${location.name.split(',')[0]}`;
+            const axios = require('axios');
+            const response = await axios.get('https://maps.googleapis.com/maps/api/place/textsearch/json', {
+              params: {
+                query: searchQuery,
+                key: process.env.GOOGLE_PLACES_API_KEY,
+                type: category === 'Dining' ? 'restaurant' : category === 'Shopping' ? 'store' : 'establishment',
+              },
+              timeout: 5000,
+            });
+            
+            if (response.data.status === 'OK' && response.data.results.length > 0) {
+              verifiedBusinesses = response.data.results.slice(0, maxDealsPerLocation).map(place => ({
+                name: place.name,
+                address: place.formatted_address,
+                location: place.geometry?.location,
+                rating: place.rating,
+                placeId: place.place_id,
+              }));
+              console.log(`[DealFetchingAgent] Found ${verifiedBusinesses.length} verified businesses via Google Places for ${location.name} ${category}`);
+            }
+          } catch (placesError) {
+            console.warn(`[DealFetchingAgent] Google Places search failed: ${placesError.message}`);
+          }
+        }
+        
         const messages = [
           {
             role: 'system',
             content: `You are a deal discovery agent for DWIGO. 
 
 CRITICAL INSTRUCTIONS:
-1. DO NOT invent fake business names. Only use REAL, VERIFIABLE businesses that exist in ${location.name}.
+1. DO NOT invent fake business names. ${verifiedBusinesses.length > 0 
+  ? `ONLY use these verified businesses: ${verifiedBusinesses.map(b => b.name).join(', ')}`
+  : 'Only use REAL, VERIFIABLE businesses that exist in ' + location.name + '. If you cannot verify real businesses, return an empty array.'}
 2. Today's date is ${currentDateStr} (${currentYear}). ALL dates must be in ${currentYear} or later.
-3. If you don't know real businesses in ${location.name}, return an empty array rather than making up fake ones.
-4. Business names must be actual establishments that can be verified online.
+3. Business names must be actual establishments that can be verified online.
+4. ${verifiedBusinesses.length > 0 ? 'You MUST use one of the verified businesses listed above. Do not invent new business names.' : 'If you don\'t know real businesses, return an empty array rather than making up fake ones.'}
 
 Return ONLY a valid JSON array of deals. Each deal must have:
 - title: string (e.g., "Happy Hour Special", "20% Off Weekend Sale")
 - description: string (brief description of the deal)
 - category: "${category}"
-- merchantName: string (REAL business name that exists in ${location.name} - verify this!)
+- merchantName: string (${verifiedBusinesses.length > 0 ? 'MUST be one of: ' + verifiedBusinesses.map(b => b.name).join(', ') : 'REAL business name that exists in ' + location.name})
 - address: string (real street address if known, otherwise empty)
 - city: "${location.name.split(',')[0]}"
 - state: "MI"
@@ -475,13 +509,17 @@ Return ONLY a valid JSON array of deals. Each deal must have:
 - endDate: ISO date string (must be 30-90 days after startDate - use ${currentYear} dates only!)
 - sourceUrl: string (real URL if available, otherwise "https://dwigo.com")
 
-If you cannot find real businesses in ${location.name} for ${category}, return an empty array [].
+${verifiedBusinesses.length > 0 
+  ? `Generate deals for these verified businesses: ${verifiedBusinesses.map(b => b.name).join(', ')}. Generate ${Math.min(maxDealsPerLocation, verifiedBusinesses.length)} deals.`
+  : `If you cannot find real businesses in ${location.name} for ${category}, return an empty array [].`}
 
-Generate ${maxDealsPerLocation} deals ONLY if you can verify the businesses are real. ALL DATES MUST BE IN ${currentYear}.`,
+ALL DATES MUST BE IN ${currentYear}.`,
           },
           {
             role: 'user',
-            content: `Find ${maxDealsPerLocation} REAL ${category} businesses in ${location.name} and generate current deals for them. Today is ${currentDateStr} (${currentYear}). Use only real business names that exist. Return as JSON array only, no other text. If you cannot verify real businesses, return [].`,
+            content: verifiedBusinesses.length > 0
+              ? `Generate ${Math.min(maxDealsPerLocation, verifiedBusinesses.length)} deals for these verified ${category} businesses in ${location.name}: ${verifiedBusinesses.map(b => `${b.name} (${b.address})`).join(', ')}. Today is ${currentDateStr} (${currentYear}). Return as JSON array only, no other text.`
+              : `Find ${maxDealsPerLocation} REAL ${category} businesses in ${location.name} and generate current deals for them. Today is ${currentDateStr} (${currentYear}). Use only real business names that exist. Return as JSON array only, no other text. If you cannot verify real businesses, return [].`,
           },
         ];
 
