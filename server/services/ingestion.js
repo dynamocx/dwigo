@@ -136,6 +136,22 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
           endDate = defaultEnd.toISOString();
         }
         
+        // Store synthetic deal flag if present (from AI generation)
+        if (rawPayload.syntheticDeal !== undefined || rawPayload.dealVerified !== undefined || rawPayload.merchantVerified !== undefined) {
+          if (!normalizedPayload) {
+            normalizedPayload = {};
+          }
+          normalizedPayload.syntheticDeal = rawPayload.syntheticDeal || false;
+          normalizedPayload.dealVerified = rawPayload.dealVerified || false;
+          normalizedPayload.merchantVerified = rawPayload.merchantVerified || false;
+          
+          // Log synthetic deals for visibility
+          if (rawPayload.syntheticDeal) {
+            console.log(`[ingestion] ⚠️  Synthetic deal detected: "${rawPayload.title || 'Untitled'}" for ${rawPayload.merchantName || 'Unknown'}`);
+            console.log(`[ingestion]   Merchant verified: ${rawPayload.merchantVerified ? '✅' : '❌'} | Deal verified: ${rawPayload.dealVerified ? '✅' : '❌'}`);
+          }
+        }
+        
         // Extract basic fields for quality check
         const fields = {
           title: normalizedPayload?.title || rawPayload.title || null,
