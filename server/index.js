@@ -225,6 +225,24 @@ app.get('*', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Verify Playwright browsers on startup (if Playwright is used)
+if (process.env.NODE_ENV === 'production') {
+  try {
+    const playwright = require('playwright');
+    // Try to check if browsers are installed by attempting to get executable path
+    playwright.chromium.executablePath().then((path) => {
+      if (path) {
+        console.log(`[Playwright] Chromium found at: ${path}`);
+      }
+    }).catch((err) => {
+      console.warn('[Playwright] Browser verification failed - browsers may not be installed:', err.message);
+      console.warn('[Playwright] This is OK for staticHtml sources, but renderedHtml sources will fail');
+    });
+  } catch (error) {
+    // Playwright not installed - that's fine
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`DWIGO Server running on port ${PORT}`);
   if (process.env.NODE_ENV === 'production') {
