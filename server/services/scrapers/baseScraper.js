@@ -326,10 +326,41 @@ async function fetchDealSource(sourceConfig) {
     console.warn(`[baseScraper] No selectors provided for ${sourceConfig.id} - cannot extract structured content`);
   }
   
-  // If no items found, log a sample of the HTML for debugging
+  // If no items found, log detailed debugging info
   if (extractedItems.length === 0 && fetchResult.html) {
-    const sampleHtml = fetchResult.html.substring(0, 500);
-    console.warn(`[baseScraper] No items extracted from ${sourceConfig.id}. HTML sample: ${sampleHtml}...`);
+    const sampleHtml = fetchResult.html.substring(0, 1000);
+    console.warn(`[baseScraper] ⚠️  No items extracted from ${sourceConfig.id} (${sourceConfig.merchantName})`);
+    console.warn(`[baseScraper] URL: ${fetchResult.url}`);
+    console.warn(`[baseScraper] HTML length: ${fetchResult.html.length} characters`);
+    console.warn(`[baseScraper] Selectors used:`, JSON.stringify(selectors, null, 2));
+    console.warn(`[baseScraper] HTML sample (first 1000 chars):`);
+    console.warn(sampleHtml);
+    console.warn(`[baseScraper] --- End HTML sample for ${sourceConfig.id} ---`);
+    
+    // Try to find common deal-related elements as a hint
+    const $ = cheerio.load(fetchResult.html);
+    const possibleSelectors = [
+      'article', '.card', '.item', '.post', '.event', 
+      '.deal', '.special', '.promotion', '.offer',
+      '[class*="deal"]', '[class*="event"]', '[class*="special"]'
+    ];
+    
+    const foundElements = [];
+    possibleSelectors.forEach(selector => {
+      const count = $(selector).length;
+      if (count > 0) {
+        foundElements.push({ selector, count });
+      }
+    });
+    
+    if (foundElements.length > 0) {
+      console.warn(`[baseScraper] 💡 Found ${foundElements.length} potential selectors in HTML:`);
+      foundElements.forEach(({ selector, count }) => {
+        console.warn(`[baseScraper]   - "${selector}": ${count} elements found`);
+      });
+    } else {
+      console.warn(`[baseScraper] 💡 No common deal-related elements found. Website structure may be different.`);
+    }
   }
 
   return {

@@ -283,18 +283,18 @@ router.post('/scrape-deals', async (req, res) => {
         sourceDetails: sourceSummary, // Add detailed breakdown
         troubleshooting: result.dealsExtracted === 0 ? {
           possibleReasons: [
-            'CSS selectors may not match the website structure',
+            'CSS selectors may not match the website structure (most likely)',
             'Websites may be blocking automated requests',
-            'Playwright may not be installed (for renderedHtml mode)',
             'No deals currently available on the target websites',
             'Keywords filter may be too restrictive',
           ],
           nextSteps: [
-            'Check server logs for detailed error messages',
-            'Verify CSS selectors match the website structure',
-            'Test URLs manually in a browser',
-            'Check if websites require authentication or have anti-bot protection',
+            'Check server logs for HTML samples and suggested selectors',
+            'Look for "[baseScraper] 💡 Found X potential selectors" messages',
+            'Update selectors in server/config/dealSources.json to match actual HTML',
+            'Test URLs manually in a browser to see current structure',
           ],
+          note: 'All sources found 0 items, which suggests CSS selectors need updating. Check server logs for HTML samples and selector suggestions.',
         } : null,
       },
       error: null,
