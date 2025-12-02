@@ -87,11 +87,29 @@ async function fetchRenderedHtml(url, timeout = 30000) {
       browser = await chromium.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        // Explicitly set executable path if PLAYWRIGHT_BROWSERS_PATH is set
+        executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH ? 
+          `${process.env.PLAYWRIGHT_BROWSERS_PATH}/chromium-1200/chrome-linux64/chrome` : 
+          undefined,
       });
+      console.log('[baseScraper] Playwright browser launched successfully');
     } catch (launchError) {
+      // Log the actual error for debugging
+      console.error('[baseScraper] Playwright launch error:', {
+        message: launchError.message,
+        code: launchError.code,
+        name: launchError.name,
+        stack: launchError.stack?.substring(0, 500),
+      });
+      
       // Check if it's a browser installation error
-      if (launchError.message && (launchError.message.includes('Executable doesn\'t exist') || launchError.message.includes('browserType.launch'))) {
-        throw new Error('Playwright browsers not installed. Run: npx playwright install chromium');
+      if (launchError.message && (
+        launchError.message.includes('Executable doesn\'t exist') || 
+        launchError.message.includes('browserType.launch') ||
+        launchError.message.includes('BrowserType.launch') ||
+        launchError.message.includes('executable doesn\'t exist')
+      )) {
+        throw new Error('Playwright browsers not installed. Run: npx playwright install chromium. Playwright may not be installed or configured correctly.');
       }
       throw launchError; // Re-throw other errors
     }
@@ -112,7 +130,35 @@ async function fetchRenderedHtml(url, timeout = 30000) {
     // Wait a bit for any lazy-loaded content
     await page.waitForTimeout(2000);
     
+    // Check for Cloudflare challenge page
+    const title = await page.title();
     const html = await page.content();
+    
+    if (title.includes('Just a moment') || html.includes('cf-browser-verification') || html.includes('challenge-platform')) {
+      console.warn(`[baseScraper] Cloudflare challenge detected for ${url} - waiting for challenge to complete...`);
+      
+      // Wait for Cloudflare challenge to complete (up to 10 seconds)
+      try {
+        await page.waitForFunction(
+          () => !document.title.includes('Just a moment') && !document.body.innerHTML.includes('cf-browser-verification'),
+          { timeout: 10000 }
+        );
+        // Re-fetch HTML after challenge completes
+        const finalHtml = await page.content();
+        const finalUrl = page.url();
+        console.log(`[baseScraper] Cloudflare challenge completed for ${url}`);
+        return {
+          success: true,
+          html: finalHtml,
+          url: finalUrl,
+          statusCode: 200,
+        };
+      } catch (cfError) {
+        console.warn(`[baseScraper] Cloudflare challenge did not complete within timeout for ${url}`);
+        // Return the challenge page HTML anyway - it will be detected later
+      }
+    }
+    
     const finalUrl = page.url();
 
     await browser.close();
@@ -324,6 +370,13 @@ async function fetchDealSource(sourceConfig) {
     }
   } else {
     console.warn(`[baseScraper] No selectors provided for ${sourceConfig.id} - cannot extract structured content`);
+  }
+  
+  // Check for Cloudflare challenge page
+  if (fetchResult.html && (fetchResult.html.includes('Just a moment') || fetchResult.html.includes('cf-browser-verification'))) {
+    console.warn(`[baseScraper] ⚠️  Cloudflare protection detected for ${sourceConfig.id} (${sourceConfig.merchantName})`);
+    console.warn(`[baseScraper] This website is blocking automated requests. Playwright may have bypassed it, but if you see 0 items, Cloudflare is likely blocking.`);
+    console.warn(`[baseScraper] Consider: 1) Using a different source URL, 2) Contacting the website owner, 3) Using their API if available`);
   }
   
   // If no items found, log detailed debugging info
