@@ -195,10 +195,31 @@ router.post('/scrape-deals', async (req, res) => {
     }
 
     console.log('[admin/ai] Starting web scraping deal discovery...');
+    console.log('[admin/ai] This should ONLY produce deals with source "scraper:web"');
 
     let result;
     try {
       result = await scrapeAndIngest();
+      
+      // Verify the result has the correct source
+      console.log('[admin/ai] Scraper result:', {
+        success: result.success,
+        sourcesScraped: result.sourcesScraped,
+        dealsExtracted: result.dealsExtracted,
+        dealsIngested: result.dealsIngested,
+        error: result.error,
+      });
+      
+      if (result.error) {
+        console.error('[admin/ai] Scraper returned error:', result.error);
+      }
+      
+      if (result.dealsExtracted === 0 && result.dealsIngested === 0) {
+        console.warn('[admin/ai] WARNING: Scraper returned 0 deals. This means:');
+        console.warn('[admin/ai] - No deals were found on the configured websites');
+        console.warn('[admin/ai] - OR the scraper failed (check logs above)');
+        console.warn('[admin/ai] - Any deals you see with source "ai" are from a DIFFERENT job (AI generation)');
+      }
     } catch (scrapeError) {
       console.error('[admin/ai] Scraping error details:', {
         message: scrapeError.message,
