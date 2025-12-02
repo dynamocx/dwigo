@@ -4,7 +4,7 @@ services:
     name: dwigo-app
     env: node
     plan: free
-    buildCommand: cd server && npm install && npx playwright install chromium
+    buildCommand: cd server && npm install && npx playwright install --with-deps chromium
     startCommand: cd server && npm start
     # Health check: Configure in Render dashboard → Settings → Health Check Path: /health
     # The /health endpoint returns 200 if healthy, 503 if unhealthy

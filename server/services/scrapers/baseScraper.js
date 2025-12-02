@@ -271,10 +271,24 @@ async function fetchDealSource(sourceConfig) {
 
   console.log(`[baseScraper] Fetching ${sourceConfig.id} (${fetchMode}): ${url}`);
 
-  // Fetch HTML
-  const fetchResult = fetchMode === 'renderedHtml' 
-    ? await fetchRenderedHtml(url)
-    : await fetchStaticHtml(url);
+  // Fetch HTML - try renderedHtml first if requested, fallback to staticHtml if Playwright fails
+  let fetchResult;
+  if (fetchMode === 'renderedHtml') {
+    try {
+      fetchResult = await fetchRenderedHtml(url);
+      // If Playwright fails, fallback to staticHtml
+      if (!fetchResult.success && fetchResult.error && fetchResult.error.includes('Playwright')) {
+        console.warn(`[baseScraper] Playwright failed for ${sourceConfig.id}, falling back to staticHtml`);
+        fetchResult = await fetchStaticHtml(url);
+      }
+    } catch (error) {
+      // Playwright not available or other error - fallback to staticHtml
+      console.warn(`[baseScraper] RenderedHtml failed for ${sourceConfig.id}: ${error.message}. Falling back to staticHtml`);
+      fetchResult = await fetchStaticHtml(url);
+    }
+  } else {
+    fetchResult = await fetchStaticHtml(url);
+  }
 
   if (!fetchResult.success) {
     return {
