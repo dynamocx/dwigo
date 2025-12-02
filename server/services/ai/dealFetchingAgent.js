@@ -427,7 +427,10 @@ async function discoverDealsForPilotLocations(options = {}) {
 
   const allDeals = [];
 
-  for (const location of PILOT_LOCATIONS) {
+  // Process locations in parallel (but categories sequentially to avoid rate limits)
+  const locationPromises = PILOT_LOCATIONS.map(async (location) => {
+    const locationDeals = [];
+    
     for (const category of categories) {
       try {
         console.log(`[DealFetchingAgent] Discovering deals for ${location.name} - ${category}...`);
@@ -469,7 +472,7 @@ async function discoverDealsForPilotLocations(options = {}) {
             }
             
             console.log(`[DealFetchingAgent] Searching Google Places: "${searchQuery}"`);
-            const placesResult = await searchGooglePlaces(searchQuery, cityName, stateAbbr);
+            const placesResult = await searchGooglePlaces(searchQuery, cityName, stateAbbr, { returnAll: true });
             
             if (placesResult && placesResult.results && placesResult.results.length > 0) {
               // Use the results array from searchGooglePlaces
@@ -614,7 +617,7 @@ ALL DATES MUST BE IN ${currentYear}. Return JSON array only, no markdown, no exp
                 const finalLatitude = verifiedBusiness?.latitude || deal.latitude || location.latitude;
                 const finalLongitude = verifiedBusiness?.longitude || deal.longitude || location.longitude;
                 
-                allDeals.push({
+                locationDeals.push({
                   title: deal.title,
                   description: deal.description || `${deal.title} at ${finalMerchantName}`,
                   category: deal.category || category,
@@ -658,6 +661,16 @@ ALL DATES MUST BE IN ${currentYear}. Return JSON array only, no markdown, no exp
         }
       }
     }
+    
+    return locationDeals;
+  });
+  
+  // Wait for all locations to complete
+  const locationResults = await Promise.all(locationPromises);
+  
+  // Flatten results
+  for (const locationDeals of locationResults) {
+    allDeals.push(...locationDeals);
   }
 
   console.log(`[DealFetchingAgent] Total deals discovered: ${allDeals.length}`);
