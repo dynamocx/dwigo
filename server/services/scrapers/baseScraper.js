@@ -82,10 +82,19 @@ async function fetchRenderedHtml(url, timeout = 30000) {
       throw new Error('Playwright chromium not available. Run: npm install playwright && npx playwright install chromium');
     }
     
-    browser = await chromium.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    // Try to launch browser - this will fail if browsers aren't installed
+    try {
+      browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+    } catch (launchError) {
+      // Check if it's a browser installation error
+      if (launchError.message && (launchError.message.includes('Executable doesn\'t exist') || launchError.message.includes('browserType.launch'))) {
+        throw new Error('Playwright browsers not installed. Run: npx playwright install chromium');
+      }
+      throw launchError; // Re-throw other errors
+    }
 
     const context = await browser.newContext({
       userAgent: USER_AGENT,

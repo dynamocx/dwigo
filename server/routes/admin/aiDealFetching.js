@@ -218,7 +218,18 @@ router.post('/scrape-deals', async (req, res) => {
         console.warn('[admin/ai] WARNING: Scraper returned 0 deals. This means:');
         console.warn('[admin/ai] - No deals were found on the configured websites');
         console.warn('[admin/ai] - OR the scraper failed (check logs above)');
+        console.warn('[admin/ai] - OR Playwright browsers may not be installed (check build logs)');
         console.warn('[admin/ai] - Any deals you see with source "ai" are from a DIFFERENT job (AI generation)');
+        
+        // Check if any sources failed due to Playwright
+        const playwrightFailures = result.results?.filter(r => 
+          r.error && r.error.includes('Playwright') && r.error.includes('Executable doesn\'t exist')
+        ) || [];
+        
+        if (playwrightFailures.length > 0) {
+          console.warn(`[admin/ai] ${playwrightFailures.length} sources failed due to missing Playwright browsers`);
+          console.warn('[admin/ai] To fix: Check build logs for "Installing Chromium..." - if missing, Playwright browsers weren\'t installed');
+        }
       }
     } catch (scrapeError) {
       console.error('[admin/ai] Scraping error details:', {
