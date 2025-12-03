@@ -8,6 +8,7 @@
  */
 
 const axios = require('axios');
+const { mapEventbriteCategory } = require('../../config/categoryMapping');
 
 const EVENTBRITE_API_BASE = 'https://www.eventbriteapi.com/v3';
 const MID_MICHIGAN_LOCATIONS = [
@@ -80,32 +81,42 @@ const transformEventbriteEvent = (event, location) => {
     price = ticketPrice.major_value + (ticketPrice.minor_value / 100);
   }
 
-  // Determine category
+  // Determine category using mapping system
   let category = 'Entertainment';
-  const categoryId = event.category_id;
-  if (categoryId) {
-    // Map Eventbrite categories to DWIGO categories
-    const categoryMap = {
-      '103': 'Entertainment', // Music
-      '104': 'Entertainment', // Food & Drink
-      '105': 'Entertainment', // Sports & Fitness
-      '106': 'Entertainment', // Travel & Outdoor
-      '107': 'Entertainment', // Business
-      '108': 'Entertainment', // Science & Technology
-      '109': 'Entertainment', // Health
-      '110': 'Entertainment', // Education
-      '111': 'Entertainment', // Family
-      '112': 'Entertainment', // Holiday
-      '113': 'Entertainment', // Community
-      '114': 'Entertainment', // Arts
-      '115': 'Entertainment', // Film & Media
-      '116': 'Entertainment', // Fashion
-      '117': 'Entertainment', // Home & Lifestyle
-      '118': 'Entertainment', // Auto & Boat
-      '119': 'Entertainment', // Hobbies
-      '199': 'Entertainment', // Other
-    };
-    category = categoryMap[categoryId] || 'Entertainment';
+  let categories = ['Entertainment']; // Multiple categories if applicable
+  
+  // Try to get category name from event
+  const categoryName = event.category?.name || event.subcategory?.name || null;
+  if (categoryName) {
+    categories = mapEventbriteCategory(categoryName);
+    category = categories[0] || 'Entertainment';
+  } else {
+    // Fallback to category_id mapping if name not available
+    const categoryId = event.category_id;
+    if (categoryId) {
+      const categoryIdMap = {
+        '103': ['Entertainment'], // Music
+        '104': ['Dining', 'Spirits, Beer & Wine'], // Food & Drink
+        '105': ['Entertainment', 'Wellness'], // Sports & Fitness
+        '106': ['Travel', 'Entertainment'], // Travel & Outdoor
+        '107': ['Entertainment'], // Business
+        '108': ['Entertainment'], // Science & Technology
+        '109': ['Wellness'], // Health
+        '110': ['Entertainment'], // Education
+        '111': ['Family Activities', 'Entertainment'], // Family
+        '112': ['Entertainment'], // Holiday
+        '113': ['Entertainment'], // Community
+        '114': ['Entertainment'], // Arts
+        '115': ['Entertainment'], // Film & Media
+        '116': ['Shopping', 'Entertainment'], // Fashion
+        '117': ['Home Improvement', 'Entertainment'], // Home & Lifestyle
+        '118': ['Entertainment'], // Auto & Boat
+        '119': ['Entertainment'], // Hobbies
+        '199': ['Entertainment'], // Other
+      };
+      categories = categoryIdMap[categoryId] || ['Entertainment'];
+      category = categories[0];
+    }
   }
 
   const merchantAlias = venue.name || event.organizer?.name || 'Eventbrite Event';
@@ -116,6 +127,7 @@ const transformEventbriteEvent = (event, location) => {
       title: event.name?.text || 'Untitled Event',
       description: event.description?.text || event.summary || null,
       category,
+      categories, // Multiple categories for mapping
       address: venue.address?.localized_address_display || venue.address?.address_1 || null,
       city: venue.address?.city || location.name.split(',')[0] || null,
       state: venue.address?.region || 'MI',
@@ -128,11 +140,13 @@ const transformEventbriteEvent = (event, location) => {
       sourceUrl: event.url || null,
       eventbriteId: event.id,
       eventbriteOrganizerId: event.organizer_id,
+      sourceCategory: categoryName || `category_${event.category_id}`,
     },
     normalizedPayload: {
       title: event.name?.text || 'Untitled Event',
       description: event.description?.text || event.summary || null,
       category,
+      categories, // Store mapped categories
       location: {
         city: venue.address?.city || location.name.split(',')[0] || null,
         state: venue.address?.region || 'MI',

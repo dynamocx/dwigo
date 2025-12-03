@@ -152,6 +152,20 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
           }
         }
         
+        // Store category mapping for verification
+        if (rawPayload.categories || rawPayload.sourceCategory) {
+          if (!normalizedPayload) {
+            normalizedPayload = {};
+          }
+          normalizedPayload.categoryMapping = {
+            primary: rawPayload.category || normalizedPayload?.category || 'Entertainment',
+            all: rawPayload.categories || [rawPayload.category || 'Entertainment'],
+            sourceCategory: rawPayload.sourceCategory || null,
+            mappedAt: new Date().toISOString(),
+          };
+          console.log(`[ingestion] Category mapping stored: ${normalizedPayload.categoryMapping.all.join(', ')}`);
+        }
+        
         // Extract basic fields for quality check
         const fields = {
           title: normalizedPayload?.title || rawPayload.title || null,

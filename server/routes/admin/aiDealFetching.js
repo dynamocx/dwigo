@@ -11,6 +11,8 @@ const pool = require('../../config/database');
 const { discoverDealsForPilotLocations, matchDealsToUser } = require('../../services/ai/dealFetchingAgent');
 const { scrapeAndIngest } = require('../../services/scrapers/scraperService');
 const { processIngestionJob } = require('../../services/ingestion');
+const { fetchMidMichiganEvents } = require('../../services/aggregators/eventbrite');
+const { searchBusinessesWithPosts } = require('../../services/aggregators/googlePlacesPosts');
 
 const router = express.Router();
 
@@ -307,6 +309,175 @@ router.post('/scrape-deals', async (req, res) => {
       error: { 
         message: error.message || 'Failed to scrape deals from web',
         details: error.stack,
+      },
+      meta: {},
+    });
+  }
+});
+
+// Fetch deals from Eventbrite
+router.post('/fetch-eventbrite', async (req, res) => {
+  console.log('[admin/ai] /fetch-eventbrite endpoint hit');
+  
+  try {
+    if (!process.env.EVENTBRITE_API_TOKEN) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'EVENTBRITE_API_TOKEN not configured. Set it in environment variables.' },
+        meta: {},
+      });
+    }
+
+    console.log('[admin/ai] Starting Eventbrite event fetching...');
+    const deals = await fetchMidMichiganEvents({
+      startDate: req.body.startDate || new Date().toISOString(),
+      endDate: req.body.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    if (deals.length === 0) {
+      return res.json({
+        data: {
+          message: 'No events found from Eventbrite.',
+          dealCount: 0,
+        },
+        error: null,
+        meta: {},
+      });
+    }
+
+    // Ingest the deals
+    const job = await processIngestionJob({
+      source: 'eventbrite:api',
+      scope: 'mid-michigan',
+      deals,
+    });
+
+    console.log(`[admin/ai] Eventbrite ingestion job created: ${job.jobId}, ${deals.length} deals`);
+
+    res.json({
+      data: {
+        message: `Eventbrite fetch completed! Found ${deals.length} events. They should appear below shortly.`,
+        dealCount: deals.length,
+        jobId: job.jobId,
+        stats: job.stats,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ai] Eventbrite fetch error:', error);
+    return res.status(500).json({
+      data: null,
+      error: { 
+        message: `Eventbrite fetch failed: ${error.message}`,
+        details: error.response?.data || null,
+      },
+      meta: {},
+    });
+  }
+});
+
+// Fetch deals from Google Places posts
+router.post('/fetch-google-places-posts', async (req, res) => {
+  console.log('[admin/ai] /fetch-google-places-posts endpoint hit');
+  
+  try {
+    if (!process.env.GOOGLE_PLACES_API_KEY) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'GOOGLE_PLACES_API_KEY not configured. Set it in environment variables.' },
+        meta: {},
+      });
+    }
+
+    const { query, city, state, maxResults = 20 } = req.body;
+    
+    if (!query || !city || !state) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'query, city, and state are required' },
+        meta: {},
+      });
+    }
+
+    console.log(`[admin/ai] Starting Google Places posts search: "${query}" in ${city}, ${state}`);
+    const businesses = await searchBusinessesWithPosts(query, city, state, {
+      maxResults,
+      postTypes: [req.body.postTypes || 'offer'],
+    });
+
+    if (businesses.length === 0) {
+      return res.json({
+        data: {
+          message: 'No businesses found with posts.',
+          dealCount: 0,
+        },
+        error: null,
+        meta: {},
+      });
+    }
+
+    // Convert to deals format
+    const { convertPlaceToDeal } = require('../../services/aggregators/googlePlacesPosts');
+    const deals = businesses.map(business => ({
+      merchantAlias: business.placeName,
+      rawPayload: {
+        title: `Special Offer at ${business.placeName}`,
+        description: `Check out ${business.placeName} for current promotions and special offers.`,
+        category: 'Entertainment', // Will be mapped by category mapping system
+        address: business.address,
+        city: city,
+        state: state,
+        latitude: business.location?.lat,
+        longitude: business.location?.lng,
+        sourceUrl: business.website || `https://www.google.com/maps/place/?q=place_id:${business.placeId}`,
+        placeId: business.placeId,
+        sourceCategory: 'google_places',
+        requiresValidation: true,
+        syntheticDeal: true, // Mark as synthetic until we have real post data
+      },
+      normalizedPayload: {
+        title: `Special Offer at ${business.placeName}`,
+        description: `Check out ${business.placeName} for current promotions and special offers.`,
+        category: 'Entertainment',
+        location: {
+          city: city,
+          state: state,
+          latitude: business.location?.lat,
+          longitude: business.location?.lng,
+        },
+        sourceUrl: business.website || `https://www.google.com/maps/place/?q=place_id:${business.placeId}`,
+      },
+      confidence: 0.7,
+    }));
+
+    // Ingest the deals
+    const job = await processIngestionJob({
+      source: 'google_places_posts',
+      scope: `${city}, ${state}`,
+      deals,
+    });
+
+    console.log(`[admin/ai] Google Places posts ingestion job created: ${job.jobId}, ${deals.length} deals`);
+
+    res.json({
+      data: {
+        message: `Google Places posts fetch completed! Found ${deals.length} businesses. They should appear below shortly.`,
+        dealCount: deals.length,
+        jobId: job.jobId,
+        stats: job.stats,
+        note: 'Note: These are placeholder deals. Real posts require Google My Business API access.',
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ai] Google Places posts fetch error:', error);
+    return res.status(500).json({
+      data: null,
+      error: { 
+        message: `Google Places posts fetch failed: ${error.message}`,
+        details: error.response?.data || null,
       },
       meta: {},
     });
