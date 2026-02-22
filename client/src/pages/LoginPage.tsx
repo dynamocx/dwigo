@@ -31,7 +31,7 @@ const LoginPage = () => {
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3, px: 2.5 }}>
       <Stack spacing={2} alignItems="center">
         <Box component="img" src="/branding/DWIGO-LOGO.svg" alt="DWIGO" sx={{ height: 48 }} />
         <Typography variant="caption" color="text.secondary">
