@@ -17,6 +17,7 @@
     "ingest:ai:fetch": "node scripts/fetchDealsWithAI.js",
     "verify:deals": "node scripts/verifySampleDeals.js",
     "migrate:deals-status": "node scripts/migrateDealsStatus.js",
+    "migrate:password-reset": "node scripts/migratePasswordResetTokens.js",
     "test": "jest"
   },
   "dependencies": {

@@ -8,7 +8,9 @@ import AgentPage from '@/pages/AgentPage';
 import DealDetailPage from '@/pages/DealDetailPage';
 import DealsPage from '@/pages/DealsPage';
 import ExplorePage from '@/pages/ExplorePage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import LoginPage from '@/pages/LoginPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import OnboardingPage from '@/pages/OnboardingPage';
 import PreferencesPage from '@/pages/PreferencesPage';
 import ProfilePage from '@/pages/ProfilePage';
@@ -77,6 +79,8 @@ function App() {
       </Route>
       <Route path="admin/ingestion" element={<IngestionReviewPage />} />
       <Route path="login" element={<LoginPage />} />
+      <Route path="forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="reset-password" element={<ResetPasswordPage />} />
       <Route path="register" element={<RegisterPage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

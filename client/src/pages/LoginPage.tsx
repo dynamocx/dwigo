@@ -67,6 +67,11 @@ const LoginPage = () => {
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="current-password"
         />
+        <Typography variant="body2" sx={{ alignSelf: 'flex-end' }}>
+          <Link component="button" type="button" onClick={() => navigate('/forgot-password')}>
+            Forgot password?
+          </Link>
+        </Typography>
       </Stack>
 
       <Button variant="contained" size="large" type="submit" disabled={isSubmitting}>
