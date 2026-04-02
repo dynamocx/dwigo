@@ -449,6 +449,7 @@ router.get('/saved', authMiddleware, async (req, res) => {
       JOIN user_deal_interactions udi ON d.id = udi.deal_id
       WHERE udi.user_id = $1 
         AND udi.interaction_type = 'saved'
+        AND COALESCE(d.status, 'active') = 'active'
         AND (d.end_date IS NULL OR d.end_date > NOW())
       ORDER BY udi.created_at DESC
     `, [userId]);
