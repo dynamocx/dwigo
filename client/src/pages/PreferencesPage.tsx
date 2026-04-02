@@ -3,20 +3,36 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 
 dayjs.extend(relativeTime);
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
   Chip,
   FormControlLabel,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
   Paper,
   Stack,
   Switch,
+  TextField,
   Typography,
 } from '@mui/material';
 
-import { addFavoritePlace, fetchPreferences, updatePreferences } from '@/api/preferences';
+import { toggleDealSaved } from '@/api/deals';
+import {
+  addFavoritePlace,
+  addMerchantSuggestion,
+  deleteFavoritePlace,
+  deleteMerchantSuggestion,
+  fetchFavoritePlaces,
+  fetchMerchantSuggestions,
+  fetchPreferences,
+  updatePreferences,
+} from '@/api/preferences';
 import { useAuth } from '@/auth/AuthContext';
 import ErrorState from '@/components/common/ErrorState';
 import FullScreenLoader from '@/components/common/FullScreenLoader';
@@ -53,8 +69,51 @@ const PreferencesPage = () => {
   const [consentUpdatedAt, setConsentUpdatedAt] = useState<string | null>(null);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
   const [hasUserMadeChanges, setHasUserMadeChanges] = useState(false);
+  const [merchantForm, setMerchantForm] = useState({ name: '', address: '', city: '' });
+  const [destinationForm, setDestinationForm] = useState({ name: '', address: '' });
 
+  const queryClient = useQueryClient();
   const preferencesQuery = useQuery({ queryKey: ['preferences'], queryFn: fetchPreferences, enabled: Boolean(user) });
+  const merchantSuggestionsQuery = useQuery({
+    queryKey: ['preferences', 'merchant-suggestions'],
+    queryFn: fetchMerchantSuggestions,
+    enabled: Boolean(user),
+  });
+  const favoritePlacesQuery = useQuery({
+    queryKey: ['preferences', 'favorite-places'],
+    queryFn: fetchFavoritePlaces,
+    enabled: Boolean(user),
+  });
+
+  const addMerchantMutation = useMutation({
+    mutationFn: addMerchantSuggestion,
+    onSuccess: () => {
+      setMerchantForm({ name: '', address: '', city: '' });
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'merchant-suggestions'] });
+    },
+  });
+
+  const removeMerchantMutation = useMutation({
+    mutationFn: deleteMerchantSuggestion,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'merchant-suggestions'] });
+    },
+  });
+
+  const addDestinationMutation = useMutation({
+    mutationFn: addFavoritePlace,
+    onSuccess: () => {
+      setDestinationForm({ name: '', address: '' });
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'favorite-places'] });
+    },
+  });
+
+  const removeDestinationMutation = useMutation({
+    mutationFn: deleteFavoritePlace,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'favorite-places'] });
+    },
+  });
 
   useEffect(() => {
     const envelope = preferencesQuery.data;
@@ -204,6 +263,8 @@ const PreferencesPage = () => {
   }, [consentUpdatedAt]);
 
   const recommendedBy = preferencesQuery.data?.meta?.recommended_by ?? null;
+  const merchantSuggestions = merchantSuggestionsQuery.data?.data ?? [];
+  const favoritePlaces = favoritePlacesQuery.data?.data ?? [];
 
   if (preferencesQuery.isLoading) {
     return <FullScreenLoader message="Loading your DWIGO preferences…" />;
@@ -251,6 +312,9 @@ const PreferencesPage = () => {
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
           Merchants you never miss
         </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Pick quick suggestions below, or add a business name and where you usually find it—entries feed our merchant directory.
+        </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {BRAND_OPTIONS.map((brand) => (
             <Chip
@@ -263,11 +327,89 @@ const PreferencesPage = () => {
             />
           ))}
         </Stack>
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          <TextField
+            label="Merchant or brand name"
+            value={merchantForm.name}
+            onChange={(e) => setMerchantForm((f) => ({ ...f, name: e.target.value }))}
+            fullWidth
+            size="small"
+            required
+          />
+          <TextField
+            label="Address or neighborhood (optional)"
+            value={merchantForm.address}
+            onChange={(e) => setMerchantForm((f) => ({ ...f, address: e.target.value }))}
+            fullWidth
+            size="small"
+          />
+          <TextField
+            label="City (optional)"
+            value={merchantForm.city}
+            onChange={(e) => setMerchantForm((f) => ({ ...f, city: e.target.value }))}
+            fullWidth
+            size="small"
+          />
+          <Button
+            variant="outlined"
+            disabled={!merchantForm.name.trim() || addMerchantMutation.isPending}
+            onClick={() =>
+              addMerchantMutation.mutate({
+                merchantName: merchantForm.name.trim(),
+                address: merchantForm.address.trim() || undefined,
+                city: merchantForm.city.trim() || undefined,
+              })
+            }
+          >
+            {addMerchantMutation.isPending ? 'Adding…' : 'Add merchant to track'}
+          </Button>
+          {addMerchantMutation.isError ? (
+            <Typography variant="caption" color="error">
+              Could not save that merchant. Try again.
+            </Typography>
+          ) : null}
+        </Stack>
+        {merchantSuggestionsQuery.isError ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Could not load your saved merchants.
+          </Typography>
+        ) : merchantSuggestionsQuery.isLoading ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Loading your merchants…
+          </Typography>
+        ) : merchantSuggestions.length > 0 ? (
+          <List dense disablePadding sx={{ mt: 1 }}>
+            {merchantSuggestions.map((m) => (
+              <ListItem
+                key={m.id}
+                secondaryAction={
+                  <IconButton
+                    edge="end"
+                    aria-label={`Remove ${m.merchantName}`}
+                    onClick={() => removeMerchantMutation.mutate(m.id)}
+                    disabled={removeMerchantMutation.isPending}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                }
+                sx={{ pr: 6, alignItems: 'flex-start' }}
+              >
+                <ListItemText
+                  primary={m.merchantName}
+                  secondary={[m.address, m.city].filter(Boolean).join(' · ') || 'Location not specified'}
+                />
+              </ListItem>
+            ))}
+          </List>
+        ) : null}
       </Paper>
 
       <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: (theme) => `1px solid ${theme.palette.divider}` }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700 }} gutterBottom>
           Destinations you frequent
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Choose metro areas you care about, then add specific places (malls, neighborhoods, venues) you visit often.
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mb={1.5}>
           {CITY_OPTIONS.map((city) => (
@@ -281,9 +423,75 @@ const PreferencesPage = () => {
             />
           ))}
         </Stack>
-        <Typography variant="caption" color="text.secondary">
-          Want to add a specific venue? Tap suggestions in the deals feed to lock them in.
-        </Typography>
+        <Stack spacing={1.5}>
+          <TextField
+            label="Place or destination name"
+            value={destinationForm.name}
+            onChange={(e) => setDestinationForm((f) => ({ ...f, name: e.target.value }))}
+            fullWidth
+            size="small"
+            required
+          />
+          <TextField
+            label="Address or area (optional)"
+            value={destinationForm.address}
+            onChange={(e) => setDestinationForm((f) => ({ ...f, address: e.target.value }))}
+            fullWidth
+            size="small"
+          />
+          <Button
+            variant="outlined"
+            disabled={!destinationForm.name.trim() || addDestinationMutation.isPending}
+            onClick={() =>
+              addDestinationMutation.mutate({
+                placeName: destinationForm.name.trim(),
+                address: destinationForm.address.trim() || undefined,
+                placeType: 'destination',
+                category: 'Travel',
+              })
+            }
+          >
+            {addDestinationMutation.isPending ? 'Adding…' : 'Add destination'}
+          </Button>
+          {addDestinationMutation.isError ? (
+            <Typography variant="caption" color="error">
+              Could not save that destination. Try again.
+            </Typography>
+          ) : null}
+        </Stack>
+        {favoritePlacesQuery.isError ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Could not load your saved destinations.
+          </Typography>
+        ) : favoritePlacesQuery.isLoading ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Loading your destinations…
+          </Typography>
+        ) : favoritePlaces.length > 0 ? (
+          <List dense disablePadding sx={{ mt: 1 }}>
+            {favoritePlaces.map((p) => (
+              <ListItem
+                key={p.id}
+                secondaryAction={
+                  <IconButton
+                    edge="end"
+                    aria-label={`Remove ${p.place_name}`}
+                    onClick={() => removeDestinationMutation.mutate(p.id)}
+                    disabled={removeDestinationMutation.isPending}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                }
+                sx={{ pr: 6, alignItems: 'flex-start' }}
+              >
+                <ListItemText
+                  primary={p.place_name}
+                  secondary={p.address || 'No address saved'}
+                />
+              </ListItem>
+            ))}
+          </List>
+        ) : null}
       </Paper>
 
       <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: (theme) => `1px solid ${theme.palette.divider}` }}>
@@ -397,18 +605,6 @@ const PreferencesPage = () => {
           disabled={updateMutation.isPending}
         >
           {updateMutation.isPending ? 'Saving…' : updateMutation.isSuccess ? 'Saved ✓' : 'Save preferences'}
-        </Button>
-        <Button
-          variant="outlined"
-          onClick={() =>
-            void addFavoritePlace({
-              placeName: 'Custom Venue',
-              placeType: 'dining',
-              category: 'Restaurants',
-            })
-          }
-        >
-          Quick add venue
         </Button>
       </Stack>
       

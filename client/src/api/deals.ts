@@ -16,7 +16,6 @@ interface DealResponse {
   end_date: string | null;
   max_redemptions: number | null;
   current_redemptions: number;
-  is_active: boolean;
   image_url: string | null;
   terms_conditions: string | null;
   created_at: string;
@@ -37,8 +36,9 @@ interface DealResponse {
   source_reference?: string | null;
   confidence_score?: number | null;
   last_seen_at?: string | null;
-  is_active?: boolean | null; // legacy column support
+  is_active?: boolean | null;
   website?: string | null;
+  syntheticDeal?: boolean;
 }
 
 const parseCurrency = (value: string | null): number | null => {
@@ -58,6 +58,7 @@ const mapDeal = (deal: DealResponse): Deal => ({
   startDate: deal.start_date,
   endDate: deal.end_date,
   isActive: deal.status ? deal.status === 'active' : Boolean(deal.is_active),
+  syntheticDeal: deal.syntheticDeal ?? false,
   imageUrl: deal.image_url,
   termsConditions: deal.terms_conditions,
   businessName: deal.business_name || 'Business',

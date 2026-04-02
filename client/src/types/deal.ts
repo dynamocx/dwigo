@@ -23,5 +23,6 @@ export interface Deal {
   sourceReference?: string | null;
   sourceType?: string | null;
   website?: string | null;
+  syntheticDeal?: boolean;
 }
 

@@ -13,6 +13,25 @@ const buildEnvelope = ({ data, error = null, meta = {} }) => ({
   meta: { recommended_by: DEFAULT_RECOMMENDER, ...meta },
 });
 
+/** Extract syntheticDeal from source_details and attach to deal for API response. */
+function enrichDealWithSynthetic(deal) {
+  if (!deal) return deal;
+  let synthetic = false;
+  if (deal.source_details) {
+    try {
+      const sd = typeof deal.source_details === 'string' ? JSON.parse(deal.source_details) : deal.source_details;
+      synthetic = !!(sd?.rawPayload?.syntheticDeal ?? sd?.syntheticDeal);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  return { ...deal, syntheticDeal: synthetic };
+}
+
+function enrichDealsWithSynthetic(rows) {
+  return rows.map(enrichDealWithSynthetic);
+}
+
 // Get all active deals
 router.get('/', async (req, res) => {
   try {
@@ -77,7 +96,7 @@ router.get('/', async (req, res) => {
     
     res.json(
       buildEnvelope({
-        data: result.rows,
+        data: enrichDealsWithSynthetic(result.rows),
         meta: {
           total: result.rows.length,
           cache_hit: false,
@@ -262,7 +281,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     meta.total = deals.length;
     res.json(
       buildEnvelope({
-        data: deals,
+        data: enrichDealsWithSynthetic(deals),
         meta,
       })
     );
@@ -403,7 +422,7 @@ router.get('/saved', authMiddleware, async (req, res) => {
     });
 
     console.log(`[deals/saved] Returning ${deals.length} deals to client`);
-    res.json(buildEnvelope({ data: deals, meta: { total: deals.length } }));
+    res.json(buildEnvelope({ data: enrichDealsWithSynthetic(deals), meta: { total: deals.length } }));
   } catch (error) {
     console.error('Get saved deals error:', error);
     console.error('Error details:', {
@@ -462,7 +481,7 @@ router.get('/:id', async (req, res) => {
         );
     }
 
-    res.json(buildEnvelope({ data: result.rows[0], meta: { deal_id: Number(id) } }));
+    res.json(buildEnvelope({ data: enrichDealWithSynthetic(result.rows[0]), meta: { deal_id: Number(id) } }));
   } catch (error) {
     console.error('Get deal error:', error);
     res

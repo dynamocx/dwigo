@@ -14,7 +14,7 @@ const getUserIdFromRequest = (req) => {
   const token = authHeader.slice(7);
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
     return payload.userId;
   } catch (error) {
     return null;

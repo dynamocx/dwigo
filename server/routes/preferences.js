@@ -10,6 +10,15 @@ const buildEnvelope = ({ data, error = null, meta = {} }) => ({
   meta: { recommended_by: 'preferences-service', ...meta },
 });
 
+const optionalCoord = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const MERCHANT_SUGGESTION_COLUMNS =
+  'id, user_id AS "userId", merchant_name AS "merchantName", address, city, latitude, longitude, notes, created_at AS "createdAt"';
+
 // Get user preferences
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -174,18 +183,146 @@ router.put('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Merchant suggestions (user-submitted name + location to grow merchant data)
+router.post('/merchant-suggestions', authMiddleware, async (req, res) => {
+  try {
+    const name = typeof req.body.merchantName === 'string' ? req.body.merchantName.trim() : '';
+    if (!name || name.length > 255) {
+      return res
+        .status(400)
+        .json(
+          buildEnvelope({
+            data: null,
+            error: { message: 'merchantName is required (max 255 characters)', code: 'VALIDATION_ERROR' },
+          })
+        );
+    }
+    const address =
+      typeof req.body.address === 'string' && req.body.address.trim() ? req.body.address.trim().slice(0, 2000) : null;
+    const city =
+      typeof req.body.city === 'string' && req.body.city.trim() ? req.body.city.trim().slice(0, 100) : null;
+    const notes =
+      typeof req.body.notes === 'string' && req.body.notes.trim() ? req.body.notes.trim().slice(0, 2000) : null;
+    const latitude = optionalCoord(req.body.latitude);
+    const longitude = optionalCoord(req.body.longitude);
+
+    const result = await pool.query(
+      `INSERT INTO user_merchant_suggestions (
+        user_id, merchant_name, address, city, latitude, longitude, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING ${MERCHANT_SUGGESTION_COLUMNS}`,
+      [req.user.userId, name, address, city, latitude, longitude, notes]
+    );
+
+    res.status(201).json(buildEnvelope({ data: result.rows[0] }));
+  } catch (error) {
+    console.error('Add merchant suggestion error:', error);
+    res
+      .status(500)
+      .json(
+        buildEnvelope({
+          data: null,
+          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+        })
+      );
+  }
+});
+
+router.get('/merchant-suggestions', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ${MERCHANT_SUGGESTION_COLUMNS} FROM user_merchant_suggestions WHERE user_id = $1 ORDER BY created_at DESC`,
+      [req.user.userId]
+    );
+    res.json(buildEnvelope({ data: result.rows, meta: { total: result.rows.length } }));
+  } catch (error) {
+    console.error('Get merchant suggestions error:', error);
+    if (error.message && error.message.includes('user_merchant_suggestions')) {
+      return res
+        .status(503)
+        .json(
+          buildEnvelope({
+            data: [],
+            error: {
+              message: 'Merchant suggestions require a database migration. Run server/migrations/20260402_user_merchant_suggestions.sql',
+              code: 'SCHEMA_MISSING',
+            },
+            meta: { total: 0 },
+          })
+        );
+    }
+    res
+      .status(500)
+      .json(
+        buildEnvelope({
+          data: null,
+          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+        })
+      );
+  }
+});
+
+router.delete('/merchant-suggestions/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `DELETE FROM user_merchant_suggestions WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user.userId]
+    );
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json(
+          buildEnvelope({
+            data: null,
+            error: { message: 'Merchant suggestion not found', code: 'NOT_FOUND' },
+          })
+        );
+    }
+    res.json(buildEnvelope({ data: { removed: true, id: Number(id) } }));
+  } catch (error) {
+    console.error('Remove merchant suggestion error:', error);
+    res
+      .status(500)
+      .json(
+        buildEnvelope({
+          data: null,
+          error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+        })
+      );
+  }
+});
+
 // Add favorite place
 router.post('/favorite-places', authMiddleware, async (req, res) => {
   try {
-    const {
-      placeName,
-      placeType,
-      address,
-      latitude,
-      longitude,
-      category
-    } = req.body;
-    
+    const placeName =
+      typeof req.body.placeName === 'string' ? req.body.placeName.trim() : '';
+    if (!placeName || placeName.length > 255) {
+      return res
+        .status(400)
+        .json(
+          buildEnvelope({
+            data: null,
+            error: { message: 'placeName is required (max 255 characters)', code: 'VALIDATION_ERROR' },
+          })
+        );
+    }
+    const placeType =
+      typeof req.body.placeType === 'string' && req.body.placeType.trim()
+        ? req.body.placeType.trim().slice(0, 100)
+        : null;
+    const address =
+      typeof req.body.address === 'string' && req.body.address.trim()
+        ? req.body.address.trim().slice(0, 2000)
+        : null;
+    const category =
+      typeof req.body.category === 'string' && req.body.category.trim()
+        ? req.body.category.trim().slice(0, 100)
+        : null;
+    const latitude = optionalCoord(req.body.latitude);
+    const longitude = optionalCoord(req.body.longitude);
+
     const result = await pool.query(
       `INSERT INTO user_favorite_places (
         user_id, place_name, place_type, address, latitude, longitude, category

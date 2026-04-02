@@ -36,9 +36,46 @@ export interface FavoritePlace {
   longitude: number | null;
   category: string | null;
   created_at: string;
-  updated_at: string;
 }
+
+export const fetchFavoritePlaces = () => dwigo.get<FavoritePlace[]>('/preferences/favorite-places');
 
 export const addFavoritePlace = (payload: FavoritePlacePayload) =>
   dwigo.post<FavoritePlacePayload, FavoritePlace>('/preferences/favorite-places', payload);
+
+export const deleteFavoritePlace = (id: number) =>
+  dwigo.delete<{ removed: boolean; id: number }>(`/preferences/favorite-places/${id}`);
+
+export interface MerchantSuggestionPayload {
+  merchantName: string;
+  address?: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
+  notes?: string;
+}
+
+export interface MerchantSuggestion {
+  id: number;
+  userId: number;
+  merchantName: string;
+  address: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export const fetchMerchantSuggestions = () =>
+  dwigo.get<MerchantSuggestion[]>('/preferences/merchant-suggestions');
+
+export const addMerchantSuggestion = (payload: MerchantSuggestionPayload) =>
+  dwigo.post<MerchantSuggestionPayload, MerchantSuggestion>(
+    '/preferences/merchant-suggestions',
+    payload
+  );
+
+export const deleteMerchantSuggestion = (id: number) =>
+  dwigo.delete<{ removed: boolean; id: number }>(`/preferences/merchant-suggestions/${id}`);
 

@@ -2,10 +2,24 @@ const crypto = require('crypto');
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const Joi = require('joi');
 const pool = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
+
+const registerSchema = Joi.object({
+  email: Joi.string().email().required().max(255),
+  password: Joi.string().min(6).max(128).required(),
+  firstName: Joi.string().min(1).max(100).required(),
+  lastName: Joi.string().min(1).max(100).required(),
+  phone: Joi.string().max(20).allow('', null),
+});
+
+const loginSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(1).required(),
+});
 
 const RESET_TOKEN_EXPIRY_HOURS = 1;
 const FRONTEND_URL = process.env.FRONTEND_URL || process.env.CORS_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:5173';
@@ -13,8 +27,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL || process.env.CORS_ORIGIN?.split(
 // Register user
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, firstName, lastName, phone } = req.body;
-    
+    const { error, value } = registerSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ error: error.details.map((d) => d.message).join('; ') });
+    }
+    const { email, password, firstName, lastName, phone } = value;
+
     // Check if user exists
     const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1',
@@ -40,7 +58,7 @@ router.post('/register', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'your-secret-key',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
     
@@ -63,8 +81,12 @@ router.post('/register', async (req, res) => {
 // Login user
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    
+    const { error, value } = loginSchema.validate(req.body, { stripUnknown: true });
+    if (error) {
+      return res.status(400).json({ error: error.details.map((d) => d.message).join('; ') });
+    }
+    const { email, password } = value;
+
     // Find user
     const result = await pool.query(
       'SELECT id, email, password_hash, first_name, last_name FROM users WHERE email = $1',
@@ -86,7 +108,7 @@ router.post('/login', async (req, res) => {
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'your-secret-key',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
     

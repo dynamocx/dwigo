@@ -4,6 +4,15 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+// Fail fast if required secrets are missing (no fallbacks — prevents forged tokens)
+const requiredEnv = ['JWT_SECRET', 'ADMIN_API_TOKEN'];
+const missing = requiredEnv.filter((key) => !process.env[key] || process.env[key].trim() === '');
+if (missing.length > 0) {
+  console.error('FATAL: Missing required environment variable(s):', missing.join(', '));
+  console.error('Set them in .env or your deployment environment. The app will not start without them.');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -39,10 +48,10 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
+// Rate limiting (generous for browsing/filtering; tighten per-route if needed)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: Number(process.env.RATE_LIMIT_MAX) || 400,
 });
 app.use(limiter);
 
@@ -61,6 +70,11 @@ app.use('/api/admin/ai', require('./routes/admin/aiDealFetching'));
 app.use('/api/events', require('./routes/events'));
 
 if (process.env.ENABLE_SCHEDULER === 'true') {
+  const { connection, hasRedisConfig } = require('./config/redis');
+  if (!hasRedisConfig || !connection) {
+    console.error('FATAL: ENABLE_SCHEDULER is true but Redis is not configured. Set REDIS_URL or disable ENABLE_SCHEDULER.');
+    process.exit(1);
+  }
   const { startScheduledJobs } = require('./jobs/scheduler');
   startScheduledJobs();
 }

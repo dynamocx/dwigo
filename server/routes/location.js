@@ -2,6 +2,11 @@ const express = require('express');
 const pool = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { canPerformAction } = require('../utils/abuseGuard');
+const {
+  HAVERSINE_DISTANCE_METERS,
+  HAVERSINE_WITHIN_KM,
+  ACTIVE_DEALS_CONDITION,
+} = require('../utils/nearbyDeals');
 
 const router = express.Router();
 
@@ -32,31 +37,19 @@ router.post('/update', authMiddleware, async (req, res) => {
     );
     
     // Check for nearby deals (using Haversine formula, works without PostGIS)
-    const nearbyDeals = await pool.query(`
+    const nearbyDeals = await pool.query(
+      `
       SELECT d.*, m.business_name, m.address, m.city, m.state,
-             (6371 * acos(
-               cos(radians($1)) * 
-               cos(radians(m.latitude)) * 
-               cos(radians(m.longitude) - radians($2)) + 
-               sin(radians($1)) * 
-               sin(radians(m.latitude))
-             )) * 1000 as distance_meters
+             ${HAVERSINE_DISTANCE_METERS}
       FROM deals d
       JOIN merchants m ON d.merchant_id = m.id
-      WHERE d.is_active = true 
-        AND d.end_date > NOW()
-        AND (
-          6371 * acos(
-            cos(radians($1)) * 
-            cos(radians(m.latitude)) * 
-            cos(radians(m.longitude) - radians($2)) + 
-            sin(radians($1)) * 
-            sin(radians(m.latitude))
-          )
-        ) <= 5
+      WHERE ${ACTIVE_DEALS_CONDITION}
+        AND ${HAVERSINE_WITHIN_KM}
       ORDER BY distance_meters
       LIMIT 10
-    `, [latitude, longitude]);
+    `,
+      [latitude, longitude, 5]
+    );
     
     res.json({
       message: 'Location updated successfully',
@@ -78,30 +71,18 @@ router.get('/nearby', authMiddleware, async (req, res) => {
     }
     
     // Use Haversine formula for distance calculation (works without PostGIS)
-    const deals = await pool.query(`
+    const deals = await pool.query(
+      `
       SELECT d.*, m.business_name, m.address, m.city, m.state,
-             (6371 * acos(
-               cos(radians($1)) * 
-               cos(radians(m.latitude)) * 
-               cos(radians(m.longitude) - radians($2)) + 
-               sin(radians($1)) * 
-               sin(radians(m.latitude))
-             )) * 1000 as distance_meters
+             ${HAVERSINE_DISTANCE_METERS}
       FROM deals d
       JOIN merchants m ON d.merchant_id = m.id
-      WHERE d.is_active = true 
-        AND d.end_date > NOW()
-        AND (
-          6371 * acos(
-            cos(radians($1)) * 
-            cos(radians(m.latitude)) * 
-            cos(radians(m.longitude) - radians($2)) + 
-            sin(radians($1)) * 
-            sin(radians(m.latitude))
-          )
-        ) <= $3
+      WHERE ${ACTIVE_DEALS_CONDITION}
+        AND ${HAVERSINE_WITHIN_KM}
       ORDER BY distance_meters
-    `, [latitude, longitude, radius]);
+    `,
+      [latitude, longitude, radius]
+    );
     
     res.json({ deals: deals.rows });
   } catch (error) {

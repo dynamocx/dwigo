@@ -9,7 +9,7 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
     
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Verify user still exists
     const result = await pool.query('SELECT id FROM users WHERE id = $1', [decoded.userId]);

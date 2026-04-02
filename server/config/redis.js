@@ -50,6 +50,7 @@ const buildQueueEvents = (queueName) =>
 
 module.exports = {
   connection,
+  hasRedisConfig: !!hasRedisConfig,
   buildQueueEvents,
 };
 
