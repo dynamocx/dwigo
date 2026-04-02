@@ -1,3 +1,4 @@
+import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -11,8 +12,10 @@ import {
   CardActions,
   CardContent,
   Chip,
+  CircularProgress,
   IconButton,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
@@ -23,6 +26,10 @@ interface DealCardProps {
   deal: Deal;
   onToggleSave?: (deal: Deal) => void;
   onShare?: (deal: Deal) => void;
+  /** Add merchant to "never miss" / catalog suggestions (feed shortcut). */
+  onTrackMerchant?: (deal: Deal) => void;
+  /** When set and matches this deal id, show loading on the track button. */
+  trackMerchantLoadingDealId?: number | null;
   onActionClick?: (deal: Deal) => void;
   actionLabel?: string;
   onRemove?: (deal: Deal) => void;
@@ -59,6 +66,8 @@ const DealCard = ({
   deal,
   onToggleSave,
   onShare,
+  onTrackMerchant,
+  trackMerchantLoadingDealId,
   onActionClick,
   actionLabel = 'View Deal',
   onRemove,
@@ -77,6 +86,8 @@ const DealCard = ({
     }
     navigate(`/deals/${deal.id}`);
   };
+
+  const trackLoading = trackMerchantLoadingDealId === deal.id;
 
   return (
     <Card
@@ -186,6 +197,19 @@ const DealCard = ({
           <IconButton onClick={() => onShare?.(deal)} aria-label="Share deal">
             <ShareIcon />
           </IconButton>
+          {onTrackMerchant ? (
+            <Tooltip title="Track this merchant — never miss them; helps grow our directory">
+              <span>
+                <IconButton
+                  onClick={() => onTrackMerchant(deal)}
+                  aria-label="Track this merchant"
+                  disabled={trackLoading}
+                >
+                  {trackLoading ? <CircularProgress size={22} color="inherit" /> : <AddBusinessIcon />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : null}
         </Stack>
         <Button
           variant="contained"

@@ -16,6 +16,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
+import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -27,6 +28,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
 import { useAuth } from '@/auth/AuthContext';
+import { addMerchantSuggestion } from '@/api/preferences';
 import { fetchDeal, toggleDealSaved, trackDealView } from '@/api/deals';
 import ErrorState from '@/components/common/ErrorState';
 import type { Deal } from '@/types/deal';
@@ -80,6 +82,47 @@ const DealDetailPage = () => {
   });
 
   const [showSavedSnackbar, setShowSavedSnackbar] = useState(false);
+  const [trackSnack, setTrackSnack] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
+
+  const trackMerchantMutation = useMutation({
+    mutationFn: (d: Deal) =>
+      addMerchantSuggestion({
+        merchantName: (d.businessName && d.businessName.trim()) || d.title || 'Merchant',
+        address: d.address ?? undefined,
+        city: d.city ?? undefined,
+        state: d.state ?? undefined,
+        latitude: d.latitude ?? undefined,
+        longitude: d.longitude ?? undefined,
+        notes: `Deal detail · deal #${d.id}`,
+      }),
+    onSuccess: (envelope) => {
+      if (envelope?.error) {
+        setTrackSnack({
+          open: true,
+          message: envelope.error.message ?? 'Could not track merchant.',
+          severity: 'error',
+        });
+        return;
+      }
+      setTrackSnack({
+        open: true,
+        message: 'Merchant added to your tracked list. You can edit entries in Preferences.',
+        severity: 'success',
+      });
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'merchant-suggestions'] });
+    },
+    onError: () => {
+      setTrackSnack({
+        open: true,
+        message: 'Could not track merchant. Try signing in again.',
+        severity: 'error',
+      });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: (deal: Deal) => toggleDealSaved(deal.id),
@@ -344,19 +387,42 @@ const DealDetailPage = () => {
               </Stack>
             ) : null}
 
-            {deal.latitude && deal.longitude ? (
+            <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+              {deal.latitude && deal.longitude ? (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PlaceIcon />}
+                  href={`https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  View on Map
+                </Button>
+              ) : null}
               <Button
                 variant="outlined"
                 size="small"
-                startIcon={<PlaceIcon />}
-                href={`https://www.google.com/maps?q=${deal.latitude},${deal.longitude}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{ alignSelf: 'flex-start', mt: 1 }}
+                startIcon={<AddBusinessIcon />}
+                disabled={trackMerchantMutation.isPending}
+                onClick={() => {
+                  if (!user) {
+                    navigate({
+                      pathname: '/login',
+                      search: `?redirect=${encodeURIComponent(`/deals/${deal.id}`)}`,
+                    });
+                    return;
+                  }
+                  trackMerchantMutation.mutate(deal);
+                }}
               >
-                View on Map
+                {trackMerchantMutation.isPending ? 'Saving…' : 'Track this merchant'}
               </Button>
-            ) : null}
+            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+              Tracking adds this business to Merchants you never miss and helps us grow the directory.
+            </Typography>
           </Stack>
         </CardContent>
       </Card>
@@ -457,6 +523,21 @@ const DealDetailPage = () => {
           sx={{ alignItems: 'center' }}
         >
           Deal saved to your basket.
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={trackSnack.open}
+        autoHideDuration={6000}
+        onClose={() => setTrackSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={trackSnack.severity}
+          onClose={() => setTrackSnack((s) => ({ ...s, open: false }))}
+          sx={{ width: '100%' }}
+        >
+          {trackSnack.message}
         </Alert>
       </Snackbar>
     </Box>

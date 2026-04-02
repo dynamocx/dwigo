@@ -313,7 +313,8 @@ const PreferencesPage = () => {
           Merchants you never miss
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          Pick quick suggestions below, or add a business name and where you usually find it—entries feed our merchant directory.
+          Pick quick suggestions below, add a business manually, or use the store icon on any deal card (or{' '}
+          <strong>Track this merchant</strong> on the deal page)—entries feed our merchant directory.
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {BRAND_OPTIONS.map((brand) => (

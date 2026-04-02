@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Chip,
   Divider,
   Skeleton,
+  Snackbar,
   Stack,
   Typography,
   useTheme,
@@ -13,6 +16,7 @@ import {
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
 import { useAuth } from '@/auth/AuthContext';
 import { useLocation } from '@/contexts/LocationContext';
+import { addMerchantSuggestion } from '@/api/preferences';
 import { fetchDeals, fetchPersonalisedDeals, toggleDealSaved } from '@/api/deals';
 import ErrorState from '@/components/common/ErrorState';
 import DealCard from '@/features/deals/components/DealCard';
@@ -23,11 +27,17 @@ const CATEGORIES = ['Restaurants', 'Shopping', 'Entertainment', 'Travel', 'Home'
 
 const DealsPage = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedLocation } = useLocation();
   const queryClient = useQueryClient();
   const { trackEvent } = useAnalytics();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [trackSnack, setTrackSnack] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   // Build location param if location is selected
   const locationParam = selectedLocation
@@ -53,6 +63,58 @@ const DealsPage = () => {
     queryFn: fetchPersonalisedDeals,
     enabled: Boolean(user),
   });
+
+  const trackMerchantMutation = useMutation({
+    mutationFn: (deal: Deal) =>
+      addMerchantSuggestion({
+        merchantName: (deal.businessName && deal.businessName.trim()) || deal.title || 'Merchant',
+        address: deal.address ?? undefined,
+        city: deal.city ?? undefined,
+        state: deal.state ?? undefined,
+        latitude: deal.latitude ?? undefined,
+        longitude: deal.longitude ?? undefined,
+        notes: `Deal feed · deal #${deal.id}`,
+      }),
+    onSuccess: (envelope) => {
+      if (envelope?.error) {
+        setTrackSnack({
+          open: true,
+          message: envelope.error.message ?? 'Could not track merchant.',
+          severity: 'error',
+        });
+        return;
+      }
+      setTrackSnack({
+        open: true,
+        message: 'Merchant added to your tracked list. Manage them in Preferences.',
+        severity: 'success',
+      });
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'merchant-suggestions'] });
+    },
+    onError: () => {
+      setTrackSnack({
+        open: true,
+        message: 'Could not track merchant. Sign in and try again.',
+        severity: 'error',
+      });
+    },
+  });
+
+  const handleTrackMerchant = (deal: Deal) => {
+    if (!user) {
+      navigate({
+        pathname: '/login',
+        search: `?redirect=${encodeURIComponent('/deals')}`,
+      });
+      return;
+    }
+    trackMerchantMutation.mutate(deal);
+  };
+
+  const trackMerchantLoadingDealId =
+    trackMerchantMutation.isPending && trackMerchantMutation.variables
+      ? trackMerchantMutation.variables.id
+      : null;
 
   const saveMutation = useMutation({
     mutationFn: (deal: Deal) => toggleDealSaved(deal.id),
@@ -182,6 +244,8 @@ const DealsPage = () => {
               deal={deal}
               onToggleSave={() => saveMutation.mutate(deal)}
               onShare={handleShare}
+              onTrackMerchant={handleTrackMerchant}
+              trackMerchantLoadingDealId={trackMerchantLoadingDealId}
             />
           ))}
         </Stack>
@@ -280,6 +344,21 @@ const DealsPage = () => {
       ) : (
         renderDeals(dealsQuery.data?.data)
       )}
+
+      <Snackbar
+        open={trackSnack.open}
+        autoHideDuration={6000}
+        onClose={() => setTrackSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={trackSnack.severity}
+          onClose={() => setTrackSnack((s) => ({ ...s, open: false }))}
+          sx={{ width: '100%' }}
+        >
+          {trackSnack.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

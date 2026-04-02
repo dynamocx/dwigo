@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -11,6 +12,7 @@ import {
   Divider,
   IconButton,
   Skeleton,
+  Snackbar,
   Stack,
   Typography,
 } from '@mui/material';
@@ -24,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/auth/AuthContext';
 import { useAnalytics } from '@/analytics/AnalyticsProvider';
+import { addMerchantSuggestion } from '@/api/preferences';
 import { fetchSavedDeals, toggleDealSaved } from '@/api/deals';
 import ErrorState from '@/components/common/ErrorState';
 import DealCard from '@/features/deals/components/DealCard';
@@ -36,6 +39,11 @@ const DealBasketPage = () => {
   const { trackEvent } = useAnalytics();
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [isRedemptionModalOpen, setIsRedemptionModalOpen] = useState(false);
+  const [trackSnack, setTrackSnack] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   const savedDealsQuery = useQuery({
     queryKey: ['saved-deals'],
@@ -51,6 +59,47 @@ const DealBasketPage = () => {
       queryClient.invalidateQueries({ queryKey: ['personalised-deals'] });
     },
   });
+
+  const trackMerchantMutation = useMutation({
+    mutationFn: (deal: Deal) =>
+      addMerchantSuggestion({
+        merchantName: (deal.businessName && deal.businessName.trim()) || deal.title || 'Merchant',
+        address: deal.address ?? undefined,
+        city: deal.city ?? undefined,
+        state: deal.state ?? undefined,
+        latitude: deal.latitude ?? undefined,
+        longitude: deal.longitude ?? undefined,
+        notes: `Deal basket · deal #${deal.id}`,
+      }),
+    onSuccess: (envelope) => {
+      if (envelope?.error) {
+        setTrackSnack({
+          open: true,
+          message: envelope.error.message ?? 'Could not track merchant.',
+          severity: 'error',
+        });
+        return;
+      }
+      setTrackSnack({
+        open: true,
+        message: 'Merchant added to your tracked list. Manage them in Preferences.',
+        severity: 'success',
+      });
+      void queryClient.invalidateQueries({ queryKey: ['preferences', 'merchant-suggestions'] });
+    },
+    onError: () => {
+      setTrackSnack({
+        open: true,
+        message: 'Could not track merchant. Try again.',
+        severity: 'error',
+      });
+    },
+  });
+
+  const trackMerchantLoadingDealId =
+    trackMerchantMutation.isPending && trackMerchantMutation.variables
+      ? trackMerchantMutation.variables.id
+      : null;
 
   const handleToggleSave = (deal: Deal) => {
     saveMutation.mutate(deal);
@@ -82,6 +131,10 @@ const DealBasketPage = () => {
 
   const handleRemoveDeal = (deal: Deal) => {
     handleToggleSave(deal);
+  };
+
+  const handleTrackMerchant = (deal: Deal) => {
+    trackMerchantMutation.mutate(deal);
   };
 
   const handlePrintSticker = () => {
@@ -179,6 +232,8 @@ const DealBasketPage = () => {
                 deal={deal}
                 onToggleSave={handleToggleSave}
                 onShare={handleShare}
+                onTrackMerchant={handleTrackMerchant}
+                trackMerchantLoadingDealId={trackMerchantLoadingDealId}
                 onActionClick={openRedemptionModal}
                 actionLabel="View & Redeem"
                 onRemove={handleRemoveDeal}
@@ -333,6 +388,21 @@ const DealBasketPage = () => {
           <Button onClick={closeRedemptionModal}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={trackSnack.open}
+        autoHideDuration={6000}
+        onClose={() => setTrackSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={trackSnack.severity}
+          onClose={() => setTrackSnack((s) => ({ ...s, open: false }))}
+          sx={{ width: '100%' }}
+        >
+          {trackSnack.message}
+        </Alert>
+      </Snackbar>
     </Stack>
   );
 };
