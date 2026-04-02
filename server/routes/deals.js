@@ -1,7 +1,9 @@
 const express = require('express');
+const Joi = require('joi');
 const pool = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { canPerformAction } = require('../utils/abuseGuard');
+const { haversineWithinKmSql } = require('../utils/nearbyDeals');
 
 const router = express.Router();
 
@@ -32,10 +34,68 @@ function enrichDealsWithSynthetic(rows) {
   return rows.map(enrichDealWithSynthetic);
 }
 
+const locationQueryValidator = Joi.string()
+  .trim()
+  .allow('')
+  .custom((value, helpers) => {
+    if (!value) return value;
+    const parts = value.split(',');
+    if (parts.length !== 2) return helpers.error('any.invalid');
+    const lat = Number(parts[0]);
+    const lng = Number(parts[1]);
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      return helpers.error('any.invalid');
+    }
+    return value;
+  });
+
+const dealsListQuerySchema = Joi.object({
+  category: Joi.string().trim().max(100).allow(''),
+  location: locationQueryValidator,
+  radius: Joi.number().min(0.5).max(500).default(15),
+  limit: Joi.number().integer().min(1).max(200).default(50),
+}).unknown(true);
+
+const dealsPersonalizedQuerySchema = Joi.object({
+  location: locationQueryValidator,
+  radius: Joi.number().min(0.5).max(500).default(15),
+  limit: Joi.number().integer().min(1).max(100).default(20),
+}).unknown(true);
+
+const dealIdParamSchema = Joi.number().integer().positive().required();
+
+function validationErrorResponse(res, error, options = {}) {
+  const { emptyList = false } = options;
+  return res.status(400).json(
+    buildEnvelope({
+      data: emptyList ? [] : null,
+      error: {
+        message: error.details.map((d) => d.message).join('; '),
+        code: 'VALIDATION_ERROR',
+      },
+    })
+  );
+}
+
 // Get all active deals
 router.get('/', async (req, res) => {
   try {
-    const { category, location, radius = 15, limit = 50 } = req.query;
+    const { error, value: q } = dealsListQuerySchema.validate(req.query, {
+      abortEarly: false,
+      convert: true,
+      stripUnknown: true,
+    });
+    if (error) {
+      return validationErrorResponse(res, error, { emptyList: true });
+    }
+    const { category, location, radius, limit } = q;
 
     let query = `
       SELECT d.*, m.business_name, m.address, m.city, m.state, 
@@ -58,17 +118,7 @@ router.get('/', async (req, res) => {
       const [lat, lng] = location.split(',').map(Number);
       if (!isNaN(lat) && !isNaN(lng)) {
         paramCount += 3;
-        // Use Haversine formula for distance calculation (works without PostGIS)
-        // Distance in kilometers: 6371 * acos(cos(radians(lat1)) * cos(radians(lat2)) * cos(radians(lng2) - radians(lng1)) + sin(radians(lat1)) * sin(radians(lat2)))
-        query += ` AND (
-          6371 * acos(
-            cos(radians($${paramCount - 2})) * 
-            cos(radians(m.latitude)) * 
-            cos(radians(m.longitude) - radians($${paramCount - 1})) + 
-            sin(radians($${paramCount - 2})) * 
-            sin(radians(m.latitude))
-          )
-        ) <= $${paramCount}`;
+        query += ` AND ${haversineWithinKmSql(paramCount - 2, paramCount - 1, paramCount)}`;
         params.push(lat, lng, radius); // radius in km
       }
     }
@@ -126,7 +176,15 @@ router.get('/', async (req, res) => {
 router.get('/personalized', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { limit = 20 } = req.query;
+    const { error: qErr, value: pq } = dealsPersonalizedQuerySchema.validate(req.query, {
+      abortEarly: false,
+      convert: true,
+      stripUnknown: true,
+    });
+    if (qErr) {
+      return validationErrorResponse(res, qErr, { emptyList: true });
+    }
+    const { limit } = pq;
 
     // Get user preferences
     const preferencesResult = await pool.query(
@@ -180,7 +238,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     
     // Filter by preferred locations (if user has location enabled)
     // Also check for location query param (from frontend location picker)
-    const { location, radius = 15 } = req.query;
+    const { location, radius } = pq;
     let locationLat = null;
     let locationLng = null;
     let locationRadius = 15000; // 15km default in meters
@@ -208,17 +266,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
 
     if (locationLat !== null && locationLng !== null) {
       paramCount += 3;
-      // Use Haversine formula for distance calculation (works without PostGIS)
-      // Distance in kilometers: 6371 * acos(cos(radians(lat1)) * cos(radians(lat2)) * cos(radians(lng2) - radians(lng1)) + sin(radians(lat1)) * sin(radians(lat2)))
-      query += ` AND (
-        6371 * acos(
-          cos(radians($${paramCount - 2})) * 
-          cos(radians(m.latitude)) * 
-          cos(radians(m.longitude) - radians($${paramCount - 1})) + 
-          sin(radians($${paramCount - 2})) * 
-          sin(radians(m.latitude))
-        )
-      ) <= $${paramCount}`;
+      query += ` AND ${haversineWithinKmSql(paramCount - 2, paramCount - 1, paramCount)}`;
       params.push(locationLat, locationLng, locationRadius / 1000); // Convert meters to km for comparison
       meta.filters.location = {
         latitude: locationLat,
@@ -302,7 +350,11 @@ router.get('/personalized', authMiddleware, async (req, res) => {
 // Save/unsave deal
 router.post('/:id/save', authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { error: idErr, value: dealId } = dealIdParamSchema.validate(Number(req.params.id));
+    if (idErr) {
+      return validationErrorResponse(res, idErr);
+    }
+    const id = String(dealId);
     const userId = req.user.userId;
     
     // Check if already saved
@@ -447,8 +499,12 @@ router.get('/saved', authMiddleware, async (req, res) => {
 // Get deal by ID (defined after specific routes like /saved)
 router.get('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    
+    const { error: idErr, value: dealId } = dealIdParamSchema.validate(Number(req.params.id));
+    if (idErr) {
+      return validationErrorResponse(res, idErr);
+    }
+    const id = dealId;
+
     const result = await pool.query(`
       SELECT d.*, m.business_name, m.address, m.city, m.state,
              m.latitude, m.longitude, m.business_type, m.website
@@ -498,7 +554,11 @@ router.get('/:id', async (req, res) => {
 // Track deal view
 router.post('/:id/view', authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { error: idErr, value: dealId } = dealIdParamSchema.validate(Number(req.params.id));
+    if (idErr) {
+      return validationErrorResponse(res, idErr);
+    }
+    const id = dealId;
     const userId = req.user.userId;
 
     if (
@@ -538,10 +598,10 @@ router.post('/:id/view', authMiddleware, async (req, res) => {
 
     await pool.query(
       'INSERT INTO user_deal_interactions (user_id, deal_id, interaction_type) VALUES ($1, $2, $3)',
-      [userId, id, 'viewed']
+      [userId, String(id), 'viewed']
     );
 
-    res.json(buildEnvelope({ data: { tracked: true }, meta: { deal_id: Number(id) } }));
+    res.json(buildEnvelope({ data: { tracked: true }, meta: { deal_id: id } }));
   } catch (error) {
     console.error('Track view error:', error);
     res

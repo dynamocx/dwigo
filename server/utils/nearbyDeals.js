@@ -14,8 +14,31 @@ const HAVERSINE_WITHIN_KM =
 const ACTIVE_DEALS_CONDITION =
   "d.status = 'active' AND (d.end_date IS NULL OR d.end_date > NOW())";
 
+/**
+ * Haversine distance from (lat,lng) params to merchant row `m` <= radius km.
+ * @param {number} latParam - 1-based $ index for user latitude
+ * @param {number} lngParam - 1-based $ index for user longitude
+ * @param {number} radiusKmParam - 1-based $ index for max distance in km
+ */
+function haversineWithinKmSql(latParam, lngParam, radiusKmParam) {
+  const a = Number(latParam);
+  const b = Number(lngParam);
+  const c = Number(radiusKmParam);
+  if (![a, b, c].every((n) => Number.isInteger(n) && n > 0)) {
+    throw new Error('haversineWithinKmSql: placeholder indices must be positive integers');
+  }
+  return `(6371 * acos(
+    cos(radians($${a})) *
+    cos(radians(m.latitude)) *
+    cos(radians(m.longitude) - radians($${b})) +
+    sin(radians($${a})) *
+    sin(radians(m.latitude))
+  )) <= $${c}`;
+}
+
 module.exports = {
   HAVERSINE_DISTANCE_METERS,
   HAVERSINE_WITHIN_KM,
   ACTIVE_DEALS_CONDITION,
+  haversineWithinKmSql,
 };
