@@ -98,9 +98,16 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
 
     for (const deal of deals) {
       try {
-        // Check deal quality before inserting
-        const rawPayload = deal.rawPayload || deal.raw_payload || {};
-        const normalizedPayload = deal.normalizedPayload || deal.normalized_payload || null;
+        // Canonical payloads on `deal` so insertRawDeal sees date fixes and enrichments
+        if (!deal.rawPayload && deal.raw_payload) {
+          deal.rawPayload = deal.raw_payload;
+        }
+        if (!deal.rawPayload || typeof deal.rawPayload !== 'object') {
+          deal.rawPayload = {};
+        }
+        const rawPayload = deal.rawPayload;
+
+        let normalizedPayload = deal.normalizedPayload ?? deal.normalized_payload ?? null;
         
         // Validate and fix dates during ingestion (not just promotion)
         const now = new Date();
@@ -144,14 +151,14 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
           normalizedPayload.syntheticDeal = rawPayload.syntheticDeal || false;
           normalizedPayload.dealVerified = rawPayload.dealVerified || false;
           normalizedPayload.merchantVerified = rawPayload.merchantVerified || false;
-          
+
           // Log synthetic deals for visibility
           if (rawPayload.syntheticDeal) {
             console.log(`[ingestion] ⚠️  Synthetic deal detected: "${rawPayload.title || 'Untitled'}" for ${rawPayload.merchantName || 'Unknown'}`);
             console.log(`[ingestion]   Merchant verified: ${rawPayload.merchantVerified ? '✅' : '❌'} | Deal verified: ${rawPayload.dealVerified ? '✅' : '❌'}`);
           }
         }
-        
+
         // Store category mapping for verification
         if (rawPayload.categories || rawPayload.sourceCategory) {
           if (!normalizedPayload) {
@@ -165,6 +172,8 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
           };
           console.log(`[ingestion] Category mapping stored: ${normalizedPayload.categoryMapping.all.join(', ')}`);
         }
+
+        deal.normalizedPayload = normalizedPayload;
         
         // Extract basic fields for quality check
         const fields = {
@@ -239,7 +248,7 @@ const processIngestionJob = async ({ source, scope = null, deals = [] } = {}) =>
           
           // Add merchant validation to normalized payload if available
           const rejectedNormalizedPayload = merchantValidation
-            ? { ...normalizedPayload, merchantValidation, rejectionReason }
+            ? { ...(normalizedPayload || {}), merchantValidation, rejectionReason }
             : normalizedPayload;
           
           await client.query(

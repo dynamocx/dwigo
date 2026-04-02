@@ -126,6 +126,8 @@ const transformEventbriteEvent = (event, location) => {
     rawPayload: {
       title: event.name?.text || 'Untitled Event',
       description: event.description?.text || event.summary || null,
+      syntheticDeal: false,
+      dataSource: 'eventbrite_api',
       category,
       categories, // Multiple categories for mapping
       address: venue.address?.localized_address_display || venue.address?.address_1 || null,
@@ -145,6 +147,7 @@ const transformEventbriteEvent = (event, location) => {
     normalizedPayload: {
       title: event.name?.text || 'Untitled Event',
       description: event.description?.text || event.summary || null,
+      syntheticDeal: false,
       category,
       categories, // Store mapped categories
       location: {

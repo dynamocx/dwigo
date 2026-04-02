@@ -16,6 +16,7 @@
     "ingest:sync:eventbrite": "node scripts/syncEventbrite.js",
     "ingest:ai:fetch": "node scripts/fetchDealsWithAI.js",
     "verify:deals": "node scripts/verifySampleDeals.js",
+    "ingest:eventbrite": "node scripts/syncEventbrite.js",
     "migrate": "node scripts/run-migrations.js",
     "migrate:deals-status": "node scripts/migrateDealsStatus.js",
     "migrate:password-reset": "node scripts/migratePasswordResetTokens.js",
