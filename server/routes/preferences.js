@@ -17,7 +17,7 @@ const optionalCoord = (v) => {
 };
 
 const MERCHANT_SUGGESTION_COLUMNS =
-  'id, user_id AS "userId", merchant_name AS "merchantName", address, city, latitude, longitude, notes, created_at AS "createdAt"';
+  'id, user_id AS "userId", merchant_name AS "merchantName", address, city, state, latitude, longitude, notes, created_at AS "createdAt"';
 
 // Get user preferences
 router.get('/', authMiddleware, async (req, res) => {
@@ -201,6 +201,8 @@ router.post('/merchant-suggestions', authMiddleware, async (req, res) => {
       typeof req.body.address === 'string' && req.body.address.trim() ? req.body.address.trim().slice(0, 2000) : null;
     const city =
       typeof req.body.city === 'string' && req.body.city.trim() ? req.body.city.trim().slice(0, 100) : null;
+    const state =
+      typeof req.body.state === 'string' && req.body.state.trim() ? req.body.state.trim().slice(0, 50) : null;
     const notes =
       typeof req.body.notes === 'string' && req.body.notes.trim() ? req.body.notes.trim().slice(0, 2000) : null;
     const latitude = optionalCoord(req.body.latitude);
@@ -208,10 +210,10 @@ router.post('/merchant-suggestions', authMiddleware, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO user_merchant_suggestions (
-        user_id, merchant_name, address, city, latitude, longitude, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        user_id, merchant_name, address, city, state, latitude, longitude, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING ${MERCHANT_SUGGESTION_COLUMNS}`,
-      [req.user.userId, name, address, city, latitude, longitude, notes]
+      [req.user.userId, name, address, city, state, latitude, longitude, notes]
     );
 
     res.status(201).json(buildEnvelope({ data: result.rows[0] }));
@@ -244,7 +246,8 @@ router.get('/merchant-suggestions', authMiddleware, async (req, res) => {
           buildEnvelope({
             data: [],
             error: {
-              message: 'Merchant suggestions require a database migration. Run server/migrations/20260402_user_merchant_suggestions.sql',
+              message:
+                'Merchant suggestions require database migrations. Run server/migrations/20260402_user_merchant_suggestions.sql and server/migrations/20260403_user_merchant_suggestions_state.sql',
               code: 'SCHEMA_MISSING',
             },
             meta: { total: 0 },

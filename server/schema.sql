@@ -225,6 +225,7 @@ CREATE TABLE user_merchant_suggestions (
     merchant_name VARCHAR(255) NOT NULL,
     address TEXT,
     city VARCHAR(100),
+    state VARCHAR(50),
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
     notes TEXT,

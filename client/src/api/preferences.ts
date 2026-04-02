@@ -50,6 +50,7 @@ export interface MerchantSuggestionPayload {
   merchantName: string;
   address?: string;
   city?: string;
+  state?: string;
   latitude?: number;
   longitude?: number;
   notes?: string;
@@ -61,6 +62,7 @@ export interface MerchantSuggestion {
   merchantName: string;
   address: string | null;
   city: string | null;
+  state: string | null;
   latitude: number | null;
   longitude: number | null;
   notes: string | null;

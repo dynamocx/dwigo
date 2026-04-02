@@ -69,7 +69,7 @@ const PreferencesPage = () => {
   const [consentUpdatedAt, setConsentUpdatedAt] = useState<string | null>(null);
   const [hasLoadedInitialData, setHasLoadedInitialData] = useState(false);
   const [hasUserMadeChanges, setHasUserMadeChanges] = useState(false);
-  const [merchantForm, setMerchantForm] = useState({ name: '', address: '', city: '' });
+  const [merchantForm, setMerchantForm] = useState({ name: '', address: '', city: '', state: '' });
   const [destinationForm, setDestinationForm] = useState({ name: '', address: '' });
 
   const queryClient = useQueryClient();
@@ -88,7 +88,7 @@ const PreferencesPage = () => {
   const addMerchantMutation = useMutation({
     mutationFn: addMerchantSuggestion,
     onSuccess: () => {
-      setMerchantForm({ name: '', address: '', city: '' });
+      setMerchantForm({ name: '', address: '', city: '', state: '' });
       void queryClient.invalidateQueries({ queryKey: ['preferences', 'merchant-suggestions'] });
     },
   });
@@ -350,6 +350,14 @@ const PreferencesPage = () => {
             fullWidth
             size="small"
           />
+          <TextField
+            label="State or region (optional)"
+            value={merchantForm.state}
+            onChange={(e) => setMerchantForm((f) => ({ ...f, state: e.target.value }))}
+            fullWidth
+            size="small"
+            inputProps={{ maxLength: 50 }}
+          />
           <Button
             variant="outlined"
             disabled={!merchantForm.name.trim() || addMerchantMutation.isPending}
@@ -358,6 +366,7 @@ const PreferencesPage = () => {
                 merchantName: merchantForm.name.trim(),
                 address: merchantForm.address.trim() || undefined,
                 city: merchantForm.city.trim() || undefined,
+                state: merchantForm.state.trim() || undefined,
               })
             }
           >
@@ -396,7 +405,14 @@ const PreferencesPage = () => {
               >
                 <ListItemText
                   primary={m.merchantName}
-                  secondary={[m.address, m.city].filter(Boolean).join(' · ') || 'Location not specified'}
+                  secondary={
+                    [
+                      m.address,
+                      [m.city, m.state].filter(Boolean).join(', ') || null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || 'Location not specified'
+                  }
                 />
               </ListItem>
             ))}
