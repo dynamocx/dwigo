@@ -58,6 +58,8 @@ async function main() {
     console.log('  1. Review deals at /admin/ingestion/pending');
     console.log('  2. Promote approved deals using the admin UI or API');
     console.log('  3. Deals will appear in the app once promoted');
+    console.log('\n[syncEventbrite] Note: Eventbrite no longer offers public event search.');
+    console.log('  Ingest pulls live events you own, plus EVENTBRITE_ORGANIZATION_IDS if set.');
 
     process.exit(0);
   } catch (error) {
