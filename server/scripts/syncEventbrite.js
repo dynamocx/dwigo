@@ -8,7 +8,21 @@
  *   0 2 * * * cd /path/to/server && node scripts/syncEventbrite.js
  */
 
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+const path = require('path');
+const fs = require('fs');
+
+const envPath = path.resolve(__dirname, '../.env');
+require('dotenv').config({ path: envPath });
+
+if (!process.env.EVENTBRITE_API_TOKEN?.trim()) {
+  console.error('[syncEventbrite] EVENTBRITE_API_TOKEN is not set after loading env file.');
+  console.error(`[syncEventbrite] Expected file: ${envPath}`);
+  console.error(`[syncEventbrite] File exists: ${fs.existsSync(envPath)}`);
+  console.error('[syncEventbrite] Add exactly this line (no spaces around =): EVENTBRITE_API_TOKEN=your_private_token');
+  console.error('[syncEventbrite] Save server/.env, then run again from the server folder: npm run ingest:eventbrite');
+  process.exit(1);
+}
+
 const { fetchMidMichiganEvents } = require('../services/aggregators/eventbrite');
 const { processIngestionJob } = require('../services/ingestion');
 
