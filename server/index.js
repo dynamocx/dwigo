@@ -72,11 +72,13 @@ app.use('/api/events', require('./routes/events'));
 if (process.env.ENABLE_SCHEDULER === 'true') {
   const { connection, hasRedisConfig } = require('./config/redis');
   if (!hasRedisConfig || !connection) {
-    console.error('FATAL: ENABLE_SCHEDULER is true but Redis is not configured. Set REDIS_URL or disable ENABLE_SCHEDULER.');
-    process.exit(1);
+    console.warn(
+      '⚠️  ENABLE_SCHEDULER is true but Redis is not configured. Scheduled jobs are disabled. Set REDIS_URL in production or set ENABLE_SCHEDULER=false.'
+    );
+  } else {
+    const { startScheduledJobs } = require('./jobs/scheduler');
+    startScheduledJobs();
   }
-  const { startScheduledJobs } = require('./jobs/scheduler');
-  startScheduledJobs();
 }
 
 // Health check endpoints - comprehensive system status
