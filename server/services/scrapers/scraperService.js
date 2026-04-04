@@ -13,13 +13,28 @@ const { processIngestionJob } = require('../ingestion');
 const DEAL_SOURCES_PATH = path.join(__dirname, '../../config/dealSources.json');
 
 /**
- * Load deal sources configuration
+ * Load deal sources configuration from server/config/dealSources.json.
+ *
+ * Optional env: SCRAPER_CATEGORY_FILTER — e.g. "Dining" to run only food/drink venues
+ * for a POC (matches each source's `category` field). Leave unset to scrape all enabled sources.
  */
 function loadDealSources() {
   try {
     const data = fs.readFileSync(DEAL_SOURCES_PATH, 'utf8');
-    const sources = JSON.parse(data);
-    return sources.filter(source => source.enabled !== false);
+    let sources = JSON.parse(data);
+    sources = sources.filter((source) => source.enabled !== false);
+
+    const categoryFilter = (process.env.SCRAPER_CATEGORY_FILTER || '').trim();
+    if (categoryFilter) {
+      const want = categoryFilter.toLowerCase();
+      const before = sources.length;
+      sources = sources.filter((s) => (s.category || '').toLowerCase() === want);
+      console.log(
+        `[scraperService] SCRAPER_CATEGORY_FILTER="${categoryFilter}": ${before} → ${sources.length} source(s)`
+      );
+    }
+
+    return sources;
   } catch (error) {
     console.error('[scraperService] Failed to load deal sources:', error.message);
     return [];
@@ -203,9 +218,12 @@ async function scrapeAndIngest() {
     confidence: deal.confidence || 0.75,
   }));
 
+  const cat = (process.env.SCRAPER_CATEGORY_FILTER || '').trim();
+  const scope = cat ? `mid-michigan-pilot:${cat.toLowerCase()}` : 'mid-michigan-pilot';
+
   const payload = {
     source: 'scraper:web', // CRITICAL: This must be 'scraper:web' not 'ai:deal-fetching-agent'
-    scope: 'mid-michigan-pilot',
+    scope,
     deals: ingestionDeals,
   };
   
