@@ -114,6 +114,30 @@ export const scrapeDealsFromWeb = () =>
     buildConfig()
   );
 
+export interface DiscoverDiningScrapePayload {
+  searchQuery?: string;
+  nearText?: string;
+  maxPlaces?: number;
+  maxItemsPerSite?: number;
+}
+
+export const discoverDiningFromPlaces = (payload: DiscoverDiningScrapePayload = {}) =>
+  dwigo.post<
+    DiscoverDiningScrapePayload,
+    {
+      message: string;
+      success?: boolean;
+      venuesFound?: number;
+      venuesScraped?: number;
+      dealsExtracted?: number;
+      dealsIngested?: number;
+      jobId?: string | number;
+      stats?: unknown;
+      results?: Array<{ name: string; website: string; dealsFound: number; success?: boolean; error?: string | null }>;
+      error?: string;
+    }
+  >('/admin/ai/discover-dining-scrape', payload, buildConfig());
+
 export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; dealCount: number; jobId: string; stats: unknown }>> => {
   const formData = new FormData();
   formData.append('csv', file);

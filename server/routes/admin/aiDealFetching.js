@@ -9,7 +9,7 @@
 const express = require('express');
 const pool = require('../../config/database');
 const { discoverDealsForPilotLocations, matchDealsToUser } = require('../../services/ai/dealFetchingAgent');
-const { scrapeAndIngest } = require('../../services/scrapers/scraperService');
+const { scrapeAndIngest, discoverPlacesAndScrapeDining } = require('../../services/scrapers/scraperService');
 const { processIngestionJob } = require('../../services/ingestion');
 const { fetchMidMichiganEvents } = require('../../services/aggregators/eventbrite');
 const { searchBusinessesWithPosts } = require('../../services/aggregators/googlePlacesPosts');
@@ -310,6 +310,64 @@ router.post('/scrape-deals', async (req, res) => {
         message: error.message || 'Failed to scrape deals from web',
         details: error.stack,
       },
+      meta: {},
+    });
+  }
+});
+
+// Google Places dining discovery → scrape each venue website → ingest (pending review)
+router.post('/discover-dining-scrape', async (req, res) => {
+  console.log('[admin/ai] /discover-dining-scrape hit');
+
+  try {
+    if (!process.env.GOOGLE_PLACES_API_KEY?.trim()) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'GOOGLE_PLACES_API_KEY not configured' },
+        meta: {},
+      });
+    }
+    if (!process.env.OPENAI_API_KEY?.trim()) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'OPENAI_API_KEY required to extract deals from discovered sites' },
+        meta: {},
+      });
+    }
+
+    const body = req.body || {};
+    const result = await discoverPlacesAndScrapeDining({
+      searchQuery: body.searchQuery,
+      nearText: body.nearText,
+      maxPlaces: body.maxPlaces,
+      maxItemsPerSite: body.maxItemsPerSite,
+      delayBetweenVenuesMs: body.delayBetweenVenuesMs,
+    });
+
+    if (!result.success) {
+      return res.status(200).json({
+        data: {
+          message: result.error || 'Discovery scrape completed with no deals',
+          ...result,
+        },
+        error: null,
+        meta: {},
+      });
+    }
+
+    res.json({
+      data: {
+        message: `Discovered ${result.venuesFound} venues with sites, extracted ${result.dealsExtracted} deals, ingested ${result.dealsIngested} pending rows.`,
+        ...result,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ai] discover-dining-scrape error:', error);
+    res.status(500).json({
+      data: null,
+      error: { message: error.message || 'discover-dining-scrape failed' },
       meta: {},
     });
   }

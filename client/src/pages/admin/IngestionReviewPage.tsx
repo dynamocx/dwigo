@@ -31,6 +31,7 @@ import {
   seedMidMichiganDeals,
   fetchDealsWithAI,
   scrapeDealsFromWeb,
+  discoverDiningFromPlaces,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
 import { assessDealQuality } from '@/utils/dealQuality';
@@ -109,6 +110,22 @@ const IngestionReviewPage = () => {
     },
     onError: (error) => {
       console.error('[AI Fetch] Error:', error);
+    },
+  });
+
+  const discoverDiningMutation = useMutation({
+    mutationFn: () =>
+      discoverDiningFromPlaces({
+        searchQuery: 'restaurant',
+        nearText: 'Lansing Flint Michigan',
+        maxPlaces: 12,
+        maxItemsPerSite: 6,
+      }),
+    onSuccess: () => {
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+        void pendingQuery.refetch();
+      }, 8000);
     },
   });
 
@@ -192,6 +209,29 @@ const IngestionReviewPage = () => {
         </Alert>
       ) : null}
 
+      {discoverDiningMutation.isError ? (
+        <Alert severity="error" onClose={() => discoverDiningMutation.reset()}>
+          Places dining discovery failed:{' '}
+          {discoverDiningMutation.error instanceof Error ? discoverDiningMutation.error.message : 'Unknown error'}
+        </Alert>
+      ) : null}
+
+      {discoverDiningMutation.isSuccess && discoverDiningMutation.data?.data ? (
+        <Alert
+          severity={discoverDiningMutation.data.data.dealsIngested ? 'success' : 'warning'}
+          onClose={() => discoverDiningMutation.reset()}
+        >
+          {discoverDiningMutation.data.data.message}
+          {discoverDiningMutation.data.data.venuesFound != null ? (
+            <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+              Venues with websites: {discoverDiningMutation.data.data.venuesFound} · Scraped:{' '}
+              {discoverDiningMutation.data.data.venuesScraped} · Deals ingested (pending):{' '}
+              {discoverDiningMutation.data.data.dealsIngested ?? 0}
+            </Typography>
+          ) : null}
+        </Alert>
+      ) : null}
+
       {scrapeMutation.isError ? (
         <Alert severity="error" onClose={() => scrapeMutation.reset()}>
           Web Scraping failed: {scrapeMutation.error instanceof Error ? scrapeMutation.error.message : 'Unknown error'}
@@ -253,15 +293,26 @@ const IngestionReviewPage = () => {
               Automated Deal Seeding
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Use AI-powered discovery or seed deals from predefined templates.
+              Use AI-powered discovery, Google Places → restaurant websites (Dining POC), or seed from templates.
             </Typography>
-            
+
             <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => discoverDiningMutation.mutate()}
+                disabled={discoverDiningMutation.isPending || scrapeMutation.isPending}
+                size="large"
+              >
+                {discoverDiningMutation.isPending
+                  ? 'Discovering & scraping…'
+                  : '📍 Discover Dining (Places → websites)'}
+              </Button>
               <Button
                 variant="contained"
                 color="primary"
                 onClick={() => scrapeMutation.mutate()}
-                disabled={scrapeMutation.isPending}
+                disabled={scrapeMutation.isPending || discoverDiningMutation.isPending}
                 size="large"
               >
                 {scrapeMutation.isPending ? 'Scraping...' : '🌐 Scrape Deals from Web'}

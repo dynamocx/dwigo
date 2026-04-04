@@ -296,8 +296,47 @@ async function processScrapedContent(scrapeResult) {
   return deals;
 }
 
+/**
+ * When selector-based chunks are empty, one LLM pass on a truncated page (discovery flow).
+ */
+async function tryExtractSingleDealFromPage(merchantName, city, state, html, sourceUrl, maxChars = 14000) {
+  if (!html || !process.env.OPENAI_API_KEY) return null;
+  const compact = html.replace(/\s+/g, ' ').trim();
+  const snippet = compact.slice(0, maxChars);
+  const extracted = await extractDealFromHtml(merchantName, city, state, snippet, sourceUrl);
+  if (!extracted.valid || !extracted.title) return null;
+
+  const now = new Date();
+  const startDate = extracted.startDate || now.toISOString();
+  let endDate = extracted.endDate;
+  if (!endDate || new Date(endDate) <= new Date(startDate)) {
+    const fixed = new Date(startDate);
+    fixed.setDate(fixed.getDate() + 60);
+    endDate = fixed.toISOString();
+  }
+
+  return {
+    title: extracted.title,
+    description: extracted.description || `${extracted.title} at ${merchantName}`,
+    category: 'Dining',
+    merchantName,
+    city,
+    state,
+    discountPercentage: extracted.discountPercentage || null,
+    discountValue: extracted.discountValue || null,
+    price: extracted.price || null,
+    startDate,
+    endDate,
+    sourceUrl,
+    confidence: 0.72,
+    requiresValidation: true,
+    extractionMethod: 'places-discovery+fullpage-llm',
+  };
+}
+
 module.exports = {
   extractDealFromHtml,
   processScrapedContent,
+  tryExtractSingleDealFromPage,
 };
 

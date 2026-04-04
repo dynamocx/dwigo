@@ -7,8 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 const { fetchDealSource } = require('./baseScraper');
-const { processScrapedContent } = require('./dealExtractor');
+const { processScrapedContent, tryExtractSingleDealFromPage } = require('./dealExtractor');
 const { processIngestionJob } = require('../ingestion');
+const { discoverDiningPlaces } = require('../aggregators/googlePlacesDiningDiscovery');
 
 const DEAL_SOURCES_PATH = path.join(__dirname, '../../config/dealSources.json');
 
@@ -39,6 +40,241 @@ function loadDealSources() {
     console.error('[scraperService] Failed to load deal sources:', error.message);
     return [];
   }
+}
+
+/** Broad selectors for unknown restaurant homepages (discovery). */
+const PLACES_DISCOVERY_SELECTORS = {
+  item: 'article, [class*="special"], [class*="event"], [class*="promo"], [class*="deal"], section, main > div',
+  title: 'h1, h2, h3',
+  desc: 'p',
+};
+
+function buildIngestionDealsFromScraped(allDeals) {
+  return allDeals.map((deal) => ({
+    merchantAlias: deal.merchantName || 'Unknown Merchant',
+    rawPayload: {
+      title: deal.title,
+      description: deal.description,
+      category: deal.category,
+      city: deal.city,
+      state: deal.state,
+      startDate: deal.startDate,
+      endDate: deal.endDate,
+      price: deal.price,
+      discountPercentage: deal.discountPercentage,
+      discountValue: deal.discountValue,
+      sourceUrl: deal.sourceUrl,
+      extractionMethod: deal.extractionMethod,
+      syntheticDeal: false,
+      dataSource: deal.dataSource || 'website_scrape',
+      googlePlaceId: deal.googlePlaceId || null,
+    },
+    normalizedPayload: {
+      title: deal.title,
+      category: deal.category,
+      location: {
+        city: deal.city,
+        state: deal.state,
+        latitude: deal.latitude ?? null,
+        longitude: deal.longitude ?? null,
+      },
+      syntheticDeal: false,
+      ...(deal.discountPercentage
+        ? {
+            discount: {
+              type: 'percentage',
+              value: deal.discountPercentage,
+            },
+          }
+        : {}),
+      ...(deal.price
+        ? {
+            price: {
+              currency: 'USD',
+              amount: deal.price,
+            },
+          }
+        : {}),
+    },
+    confidence: deal.confidence != null ? Number(deal.confidence) : 0.75,
+  }));
+}
+
+async function ingestScrapedDeals(allDeals, source, scope) {
+  if (!allDeals.length) {
+    return {
+      success: false,
+      error: 'No deals to ingest',
+      jobId: null,
+      stats: { total: 0, recorded: 0, errors: 0 },
+    };
+  }
+  const ingestionDeals = buildIngestionDealsFromScraped(allDeals);
+  const result = await processIngestionJob({
+    source,
+    scope,
+    deals: ingestionDeals,
+  });
+  return {
+    success: true,
+    jobId: result.jobId,
+    stats: result.stats,
+    dealsIngested: ingestionDeals.length,
+  };
+}
+
+/**
+ * Google Places dining discovery → each venue's website → scrape + LLM → ingestion.
+ */
+async function discoverPlacesAndScrapeDining(options = {}) {
+  if (!process.env.GOOGLE_PLACES_API_KEY?.trim()) {
+    return {
+      success: false,
+      error: 'GOOGLE_PLACES_API_KEY not configured',
+      venuesFound: 0,
+      venuesScraped: 0,
+      dealsExtracted: 0,
+      dealsIngested: 0,
+      results: [],
+    };
+  }
+
+  if (!process.env.OPENAI_API_KEY?.trim()) {
+    return {
+      success: false,
+      error: 'OPENAI_API_KEY required for extraction from discovered sites',
+      venuesFound: 0,
+      venuesScraped: 0,
+      dealsExtracted: 0,
+      dealsIngested: 0,
+      results: [],
+    };
+  }
+
+  const maxItemsPerSite = Math.min(Math.max(Number(options.maxItemsPerSite) || 6, 1), 15);
+  const delayMs = Math.max(Number(options.delayBetweenVenuesMs) || 4500, 2000);
+
+  let places;
+  try {
+    places = await discoverDiningPlaces({
+      searchQuery: options.searchQuery,
+      nearText: options.nearText,
+      maxPlaces: options.maxPlaces,
+    });
+  } catch (e) {
+    return {
+      success: false,
+      error: e.message || 'Places discovery failed',
+      venuesFound: 0,
+      venuesScraped: 0,
+      dealsExtracted: 0,
+      dealsIngested: 0,
+      results: [],
+    };
+  }
+
+  const allDeals = [];
+  const results = [];
+
+  for (const p of places) {
+    const sourceConfig = {
+      id: `gpdisc_${p.placeId}`,
+      merchantName: p.name,
+      city: p.city,
+      state: p.state,
+      type: 'restaurant',
+      category: 'Dining',
+      url: p.website,
+      fetchMode: 'renderedHtml',
+      selectors: PLACES_DISCOVERY_SELECTORS,
+      keywords: [],
+      enabled: true,
+    };
+
+    let scrapeResult;
+    try {
+      scrapeResult = await fetchDealSource(sourceConfig);
+    } catch (err) {
+      results.push({
+        placeId: p.placeId,
+        name: p.name,
+        website: p.website,
+        success: false,
+        error: err.message,
+        dealsFound: 0,
+      });
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+
+    if (scrapeResult.success && scrapeResult.extractedItems?.length > maxItemsPerSite) {
+      scrapeResult.extractedItems = scrapeResult.extractedItems.slice(0, maxItemsPerSite);
+    }
+
+    let deals = await processScrapedContent(scrapeResult);
+
+    if (deals.length === 0 && scrapeResult.success && scrapeResult.html) {
+      const one = await tryExtractSingleDealFromPage(
+        p.name,
+        p.city,
+        p.state,
+        scrapeResult.html,
+        scrapeResult.url
+      );
+      if (one) deals = [one];
+    }
+
+    const enriched = deals.map((d) => ({
+      ...d,
+      merchantName: p.name,
+      city: p.city,
+      state: p.state,
+      category: 'Dining',
+      googlePlaceId: p.placeId,
+      dataSource: 'places_discovery_website',
+      latitude: p.latitude,
+      longitude: p.longitude,
+    }));
+
+    allDeals.push(...enriched);
+    results.push({
+      placeId: p.placeId,
+      name: p.name,
+      website: p.website,
+      success: scrapeResult.success,
+      error: scrapeResult.success ? null : scrapeResult.error,
+      dealsFound: enriched.length,
+    });
+
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  if (allDeals.length === 0) {
+    return {
+      success: false,
+      error: 'No deals extracted from discovered venues (check selectors, Playwright, or page content)',
+      venuesFound: places.length,
+      venuesScraped: results.length,
+      dealsExtracted: 0,
+      dealsIngested: 0,
+      results,
+    };
+  }
+
+  const scope = `dining:places-discovery:${options.nearText?.replace(/\s+/g, '-') || 'mi'}`;
+
+  const ing = await ingestScrapedDeals(allDeals, 'scraper:places-discovery', scope);
+
+  return {
+    success: true,
+    venuesFound: places.length,
+    venuesScraped: results.length,
+    dealsExtracted: allDeals.length,
+    dealsIngested: ing.dealsIngested,
+    jobId: ing.jobId,
+    stats: ing.stats,
+    results,
+  };
 }
 
 /**
@@ -178,63 +414,17 @@ async function scrapeAndIngest() {
     };
   }
 
-  // Transform to ingestion format
-  const ingestionDeals = allDeals.map(deal => ({
-    merchantAlias: deal.merchantName || 'Unknown Merchant',
-    rawPayload: {
-      title: deal.title,
-      description: deal.description,
-      category: deal.category,
-      city: deal.city,
-      state: deal.state,
-      startDate: deal.startDate,
-      endDate: deal.endDate,
-      price: deal.price,
-      discountPercentage: deal.discountPercentage,
-      discountValue: deal.discountValue,
-      sourceUrl: deal.sourceUrl,
-      extractionMethod: deal.extractionMethod,
-    },
-    normalizedPayload: {
-      title: deal.title,
-      category: deal.category,
-      location: {
-        city: deal.city,
-        state: deal.state,
-      },
-      ...(deal.discountPercentage ? {
-        discount: {
-          type: 'percentage',
-          value: deal.discountPercentage,
-        },
-      } : {}),
-      ...(deal.price ? {
-        price: {
-          currency: 'USD',
-          amount: deal.price,
-        },
-      } : {}),
-    },
-    confidence: deal.confidence || 0.75,
-  }));
-
   const cat = (process.env.SCRAPER_CATEGORY_FILTER || '').trim();
   const scope = cat ? `mid-michigan-pilot:${cat.toLowerCase()}` : 'mid-michigan-pilot';
 
+  const ingestionDeals = buildIngestionDealsFromScraped(allDeals);
   const payload = {
-    source: 'scraper:web', // CRITICAL: This must be 'scraper:web' not 'ai:deal-fetching-agent'
+    source: 'scraper:web',
     scope,
     deals: ingestionDeals,
   };
-  
+
   console.log(`[scraperService] Ingesting ${ingestionDeals.length} deals with source: ${payload.source}`);
-  console.log(`[scraperService] Payload source verification: ${payload.source} (should be 'scraper:web')`);
-  
-  // Double-check source is correct before ingestion
-  if (payload.source !== 'scraper:web') {
-    console.error(`[scraperService] CRITICAL ERROR: Source is '${payload.source}' but should be 'scraper:web'!`);
-    throw new Error(`Invalid source: ${payload.source}. Expected 'scraper:web'`);
-  }
 
   const ingestionResult = await processIngestionJob(payload);
 
@@ -254,5 +444,7 @@ module.exports = {
   scrapeAllSources,
   scrapeAndIngest,
   loadDealSources,
+  discoverPlacesAndScrapeDining,
+  buildIngestionDealsFromScraped,
 };
 
