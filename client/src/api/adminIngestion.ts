@@ -100,9 +100,18 @@ export const submitManualDeal = (deal: ManualDealEntry) =>
     buildConfig()
   );
 
+/** Places-verified merchants → website HTML → strict LLM extraction (real offers only). */
 export const fetchDealsWithAI = (options?: { categories?: string[]; maxDealsPerLocation?: number }) =>
   dwigo.post<{ categories?: string[]; maxDealsPerLocation?: number }, { message: string; dealCount: number; jobId: string; stats: unknown }>(
     '/admin/ai/fetch-deals',
+    options || {},
+    buildConfig()
+  );
+
+/** Demo / investor deck: LLM-invented offers for real merchant names (synthetic — verify before promote). */
+export const fetchDealsWithAIDemo = (options?: { categories?: string[]; maxDealsPerLocation?: number }) =>
+  dwigo.post<{ categories?: string[]; maxDealsPerLocation?: number }, { message: string; dealCount: number; jobId: string; stats: unknown }>(
+    '/admin/ai/fetch-deals-demo',
     options || {},
     buildConfig()
   );

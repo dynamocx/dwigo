@@ -30,6 +30,7 @@ import {
   seedIngestionJob,
   seedMidMichiganDeals,
   fetchDealsWithAI,
+  fetchDealsWithAIDemo,
   scrapeDealsFromWeb,
   discoverDiningFromPlaces,
   type IngestedDealRow,
@@ -99,17 +100,30 @@ const IngestionReviewPage = () => {
   });
 
   const aiFetchMutation = useMutation({
-    mutationFn: () => fetchDealsWithAI({ categories: ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation: 5 }),
+    mutationFn: () => fetchDealsWithAI({ categories: ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation: 8 }),
     onSuccess: (data) => {
-      console.log('[AI Fetch] Success:', data);
-      // Wait a moment for the job to process, then refresh
+      console.log('[AI Real Fetch] Success:', data);
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
         void pendingQuery.refetch();
-      }, 5000); // AI takes longer
+      }, 6000);
     },
     onError: (error) => {
-      console.error('[AI Fetch] Error:', error);
+      console.error('[AI Real Fetch] Error:', error);
+    },
+  });
+
+  const aiDemoFetchMutation = useMutation({
+    mutationFn: () => fetchDealsWithAIDemo({ categories: ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation: 5 }),
+    onSuccess: (data) => {
+      console.log('[AI Demo Fetch] Success:', data);
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
+        void pendingQuery.refetch();
+      }, 5000);
+    },
+    onError: (error) => {
+      console.error('[AI Demo Fetch] Error:', error);
     },
   });
 
@@ -199,13 +213,26 @@ const IngestionReviewPage = () => {
 
       {aiFetchMutation.isError ? (
         <Alert severity="error" onClose={() => aiFetchMutation.reset()}>
-          AI Fetch failed: {aiFetchMutation.error instanceof Error ? aiFetchMutation.error.message : 'Unknown error'}
+          AI (real extraction) failed:{' '}
+          {aiFetchMutation.error instanceof Error ? aiFetchMutation.error.message : 'Unknown error'}
         </Alert>
       ) : null}
 
       {aiFetchMutation.isSuccess && aiFetchMutation.data?.data ? (
         <Alert severity="success" onClose={() => aiFetchMutation.reset()}>
-          AI Fetch completed! Found {aiFetchMutation.data.data.dealCount} deals. They should appear below shortly.
+          {aiFetchMutation.data.data.message}
+        </Alert>
+      ) : null}
+
+      {aiDemoFetchMutation.isError ? (
+        <Alert severity="error" onClose={() => aiDemoFetchMutation.reset()}>
+          AI Demo failed: {aiDemoFetchMutation.error instanceof Error ? aiDemoFetchMutation.error.message : 'Unknown error'}
+        </Alert>
+      ) : null}
+
+      {aiDemoFetchMutation.isSuccess && aiDemoFetchMutation.data?.data ? (
+        <Alert severity="warning" onClose={() => aiDemoFetchMutation.reset()}>
+          {aiDemoFetchMutation.data.data.message}
         </Alert>
       ) : null}
 
@@ -293,7 +320,8 @@ const IngestionReviewPage = () => {
               Automated Deal Seeding
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Use AI-powered discovery, Google Places → restaurant websites (Dining POC), or seed from templates.
+              Discover Dining uses Places + merchant sites (optional Maps-visible text if ENABLE_GBP_MAPS_SCRAPE). AI Real =
+              website extraction only. AI Demo = synthetic fills for decks.
             </Typography>
 
             <Stack direction="row" spacing={2} flexWrap="wrap">
@@ -301,7 +329,12 @@ const IngestionReviewPage = () => {
                 variant="contained"
                 color="secondary"
                 onClick={() => discoverDiningMutation.mutate()}
-                disabled={discoverDiningMutation.isPending || scrapeMutation.isPending}
+                disabled={
+                  discoverDiningMutation.isPending ||
+                  scrapeMutation.isPending ||
+                  aiFetchMutation.isPending ||
+                  aiDemoFetchMutation.isPending
+                }
                 size="large"
               >
                 {discoverDiningMutation.isPending
@@ -312,23 +345,52 @@ const IngestionReviewPage = () => {
                 variant="contained"
                 color="primary"
                 onClick={() => scrapeMutation.mutate()}
-                disabled={scrapeMutation.isPending || discoverDiningMutation.isPending}
+                disabled={
+                  scrapeMutation.isPending ||
+                  discoverDiningMutation.isPending ||
+                  aiFetchMutation.isPending ||
+                  aiDemoFetchMutation.isPending
+                }
                 size="large"
               >
                 {scrapeMutation.isPending ? 'Scraping...' : '🌐 Scrape Deals from Web'}
               </Button>
               <Button
                 variant="outlined"
+                color="success"
                 onClick={() => aiFetchMutation.mutate()}
-                disabled={aiFetchMutation.isPending}
+                disabled={
+                  aiFetchMutation.isPending ||
+                  aiDemoFetchMutation.isPending ||
+                  discoverDiningMutation.isPending ||
+                  scrapeMutation.isPending
+                }
                 size="large"
               >
-                {aiFetchMutation.isPending ? 'AI Fetching...' : '🤖 Fetch Deals with AI'}
+                {aiFetchMutation.isPending ? 'Extracting…' : '🤖 AI: Real (Places + website)'}
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={() => aiDemoFetchMutation.mutate()}
+                disabled={
+                  aiDemoFetchMutation.isPending ||
+                  aiFetchMutation.isPending ||
+                  discoverDiningMutation.isPending ||
+                  scrapeMutation.isPending
+                }
+                size="large"
+              >
+                {aiDemoFetchMutation.isPending ? 'Generating…' : '🎭 AI: Demo (synthetic)'}
               </Button>
               <Button
                 variant="outlined"
                 onClick={() => seedMidMichiganMutation.mutate()}
-                disabled={seedMidMichiganMutation.isPending}
+                disabled={
+                  seedMidMichiganMutation.isPending ||
+                  aiFetchMutation.isPending ||
+                  aiDemoFetchMutation.isPending
+                }
                 size="large"
               >
                 {seedMidMichiganMutation.isPending ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
@@ -336,7 +398,9 @@ const IngestionReviewPage = () => {
               <Button
                 variant="outlined"
                 onClick={() => seedMutation.mutate()}
-                disabled={seedMutation.isPending}
+                disabled={
+                  seedMutation.isPending || aiFetchMutation.isPending || aiDemoFetchMutation.isPending
+                }
                 size="large"
               >
                 {seedMutation.isPending ? 'Seeding...' : 'Seed Test Deals'}

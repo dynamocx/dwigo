@@ -10,6 +10,7 @@ const { fetchDealSource } = require('./baseScraper');
 const { processScrapedContent, tryExtractSingleDealFromPage } = require('./dealExtractor');
 const { processIngestionJob } = require('../ingestion');
 const { discoverDiningPlaces } = require('../aggregators/googlePlacesDiningDiscovery');
+const { scrapeGbpPublicTextFromMaps, mapsPlaceUrl } = require('../aggregators/googleMapsGbpSnippet');
 
 const DEAL_SOURCES_PATH = path.join(__dirname, '../../config/dealSources.json');
 
@@ -219,9 +220,36 @@ async function discoverPlacesAndScrapeDining(options = {}) {
         p.city,
         p.state,
         scrapeResult.html,
-        scrapeResult.url
+        scrapeResult.url,
+        { category: 'Dining' }
       );
       if (one) deals = [one];
+    }
+
+    let gbpText = null;
+    if (process.env.ENABLE_GBP_MAPS_SCRAPE === 'true') {
+      try {
+        gbpText = await scrapeGbpPublicTextFromMaps(p.placeId);
+      } catch (e) {
+        console.warn(`[discoverPlacesAndScrapeDining] GBP maps snippet failed for ${p.name}:`, e.message);
+      }
+    }
+
+    if (gbpText) {
+      const mapsUrl = mapsPlaceUrl(p.placeId);
+      const safe = gbpText.replace(/</g, ' ');
+      const gbpHtml = `<article><h1>Visible text from Google Maps business listing</h1><p>${safe}</p></article>`;
+      const gbpDeal = await tryExtractSingleDealFromPage(p.name, p.city, p.state, gbpHtml, mapsUrl, {
+        category: 'Dining',
+        extractionMethod: 'places-discovery+gbp-maps-visible-text',
+        confidence: 0.68,
+      });
+      if (gbpDeal) {
+        const dup = deals.some(
+          (d) => d.title && gbpDeal.title && d.title.toLowerCase() === gbpDeal.title.toLowerCase()
+        );
+        if (!dup) deals.push(gbpDeal);
+      }
     }
 
     const enriched = deals.map((d) => ({
@@ -231,7 +259,8 @@ async function discoverPlacesAndScrapeDining(options = {}) {
       state: p.state,
       category: 'Dining',
       googlePlaceId: p.placeId,
-      dataSource: 'places_discovery_website',
+      dataSource:
+        (d.extractionMethod || '').includes('gbp-maps') ? 'places_discovery_gbp_maps' : 'places_discovery_website',
       latitude: p.latitude,
       longitude: p.longitude,
     }));

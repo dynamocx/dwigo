@@ -1,6 +1,7 @@
 /**
  * Google Places Text Search + Details for dining venue discovery (official API only).
- * Returns venues with a public website so we can scrape merchant-owned pages — not GBP posts.
+ * Returns venues with a public website so we can scrape merchant-owned pages.
+ * GBP posts are not available via Places API; optional Maps-visible text is handled in scraperService + googleMapsGbpSnippet (ENABLE_GBP_MAPS_SCRAPE).
  */
 
 const axios = require('axios');

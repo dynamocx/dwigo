@@ -1,14 +1,19 @@
 /**
  * Admin API for AI Deal Fetching Agent
- * 
+ *
  * Endpoints:
- * - POST /admin/ai/fetch-deals - Trigger AI deal discovery
- * - POST /admin/ai/match-deals - Match existing deals to users with LLM
+ * - POST /admin/ai/fetch-deals — Real: Places + merchant website → strict LLM extraction
+ * - POST /admin/ai/fetch-deals-demo — Demo: synthetic offers for verified merchant names (presentations)
+ * - POST /admin/ai/match-deals — Match existing deals to users with LLM
  */
 
 const express = require('express');
 const pool = require('../../config/database');
-const { discoverDealsForPilotLocations, matchDealsToUser } = require('../../services/ai/dealFetchingAgent');
+const {
+  discoverDealsForPilotLocations,
+  discoverRealDealsFromVerifiedWebsites,
+  matchDealsToUser,
+} = require('../../services/ai/dealFetchingAgent');
 const { scrapeAndIngest, discoverPlacesAndScrapeDining } = require('../../services/scrapers/scraperService');
 const { processIngestionJob } = require('../../services/ingestion');
 const { fetchMidMichiganEvents } = require('../../services/aggregators/eventbrite');
@@ -56,49 +61,55 @@ router.use((req, res, next) => {
 
 router.use(requireAdminToken);
 
-// Trigger AI deal discovery
+// Real AI: Places-verified merchants → static fetch of their website → strict LLM extraction only (no invented offers)
 router.post('/fetch-deals', async (req, res) => {
-  console.log('[admin/ai] /fetch-deals endpoint hit');
-  console.log('[admin/ai] Request body:', JSON.stringify(req.body));
-  
+  console.log('[admin/ai] /fetch-deals (real website extraction) hit');
+
   try {
     const { categories, maxDealsPerLocation } = req.body;
 
-    if (!process.env.OPENAI_API_KEY) {
+    const hasLlm =
+      !!process.env.OPENAI_API_KEY?.trim() ||
+      (process.env.EXTRACTION_USE_CLAUDE === 'true' && !!process.env.ANTHROPIC_API_KEY?.trim());
+    if (!hasLlm) {
       return res.status(400).json({
         data: null,
-        error: { message: 'OPENAI_API_KEY not configured. Set it in environment variables.' },
-        meta: {},
-      });
-    }
-
-    console.log('[admin/ai] Starting AI deal discovery...');
-    console.log('[admin/ai] OpenAI API Key present:', !!process.env.OPENAI_API_KEY);
-
-    let deals;
-    try {
-      deals = await discoverDealsForPilotLocations({
-        categories: categories || ['Dining', 'Entertainment', 'Shopping'],
-        maxDealsPerLocation: maxDealsPerLocation || 5,
-      });
-      console.log(`[admin/ai] Discovered ${deals.length} deals`);
-    } catch (error) {
-      console.error('[admin/ai] Discovery error:', error);
-      return res.status(500).json({
-        data: null,
-        error: { 
-          message: `AI discovery failed: ${error.message}`,
-          details: error.response?.data || null,
+        error: {
+          message:
+            'Configure OPENAI_API_KEY or set EXTRACTION_USE_CLAUDE=true with ANTHROPIC_API_KEY for extraction.',
         },
         meta: {},
       });
     }
 
+    if (!process.env.GOOGLE_PLACES_API_KEY?.trim()) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'GOOGLE_PLACES_API_KEY required for verified merchant lookup.' },
+        meta: {},
+      });
+    }
+
+    let deals;
+    try {
+      deals = await discoverRealDealsFromVerifiedWebsites({
+        categories: categories || ['Dining', 'Entertainment', 'Shopping'],
+        maxDealsPerLocation: maxDealsPerLocation || 8,
+      });
+    } catch (error) {
+      console.error('[admin/ai] Real AI fetch error:', error);
+      return res.status(500).json({
+        data: null,
+        error: { message: `Real AI fetch failed: ${error.message}` },
+        meta: {},
+      });
+    }
+
     if (deals.length === 0) {
-      console.log('[admin/ai] No deals discovered - LLM may have returned empty or invalid response');
       return res.json({
         data: {
-          message: 'No deals discovered. Check server logs for details.',
+          message:
+            'No deals extracted. Businesses may lack websites, pages may be JS-only (use Discover Dining for Playwright), or sites may have no explicit offer text.',
           dealCount: 0,
         },
         error: null,
@@ -106,8 +117,7 @@ router.post('/fetch-deals', async (req, res) => {
       });
     }
 
-    // Transform to ingestion format
-    const ingestionDeals = deals.map(deal => ({
+    const ingestionDeals = deals.map((deal) => ({
       merchantAlias: deal.merchantName || 'Unknown Merchant',
       rawPayload: {
         title: deal.title,
@@ -124,48 +134,54 @@ router.post('/fetch-deals', async (req, res) => {
         price: deal.price,
         discountPercentage: deal.discountPercentage,
         sourceUrl: deal.sourceUrl,
+        syntheticDeal: false,
+        dataSource: deal.dataSource || 'verified_merchant_website',
+        googlePlaceId: deal.googlePlacesId || null,
+        extractionMethod: deal.extractionMethod,
       },
       normalizedPayload: {
         title: deal.title,
         category: deal.category,
+        syntheticDeal: false,
+        dealVerified: false,
+        merchantVerified: true,
         location: {
           city: deal.city || deal.location?.split(',')[0],
           state: deal.state || 'MI',
           latitude: deal.latitude,
           longitude: deal.longitude,
         },
-        ...(deal.discountPercentage ? {
-          discount: {
-            type: 'percentage',
-            value: deal.discountPercentage,
-          },
-        } : {}),
-        ...(deal.price ? {
-          price: {
-            currency: 'USD',
-            amount: parseFloat(String(deal.price).replace('$', '')) || null,
-          },
-        } : {}),
+        ...(deal.discountPercentage
+          ? {
+              discount: {
+                type: 'percentage',
+                value: deal.discountPercentage,
+              },
+            }
+          : {}),
+        ...(deal.price
+          ? {
+              price: {
+                currency: 'USD',
+                amount: parseFloat(String(deal.price).replace('$', '')) || null,
+              },
+            }
+          : {}),
       },
-      confidence: deal.confidence || 0.75,
+      confidence: deal.confidence || 0.78,
     }));
 
     const payload = {
-      source: 'ai:deal-fetching-agent',
-      scope: 'mid-michigan-pilot',
+      source: 'ai:verified-website',
+      scope: 'mid-michigan-real',
       deals: ingestionDeals,
     };
 
-    console.log(`[admin/ai] Processing ${ingestionDeals.length} deals through ingestion pipeline...`);
     const result = await processIngestionJob(payload);
-    console.log(`[admin/ai] Ingestion job completed:`, {
-      jobId: result.jobId,
-      stats: result.stats,
-    });
 
     res.json({
       data: {
-        message: 'AI deal discovery completed',
+        message: `Real AI fetch: extracted ${ingestionDeals.length} deal(s) from merchant websites (strict extraction).`,
         dealCount: ingestionDeals.length,
         jobId: result.jobId,
         stats: result.stats,
@@ -178,6 +194,126 @@ router.post('/fetch-deals', async (req, res) => {
     res.status(500).json({
       data: null,
       error: { message: error.message || 'Failed to fetch deals with AI' },
+      meta: {},
+    });
+  }
+});
+
+// Demo / investor deck: LLM-generated plausible offers for Places-verified merchants (not scraped — synthetic)
+router.post('/fetch-deals-demo', async (req, res) => {
+  console.log('[admin/ai] /fetch-deals-demo (synthetic) hit');
+
+  try {
+    const { categories, maxDealsPerLocation } = req.body;
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(400).json({
+        data: null,
+        error: { message: 'OPENAI_API_KEY required for demo synthetic generation.' },
+        meta: {},
+      });
+    }
+
+    let deals;
+    try {
+      deals = await discoverDealsForPilotLocations({
+        categories: categories || ['Dining', 'Entertainment', 'Shopping'],
+        maxDealsPerLocation: maxDealsPerLocation || 5,
+      });
+    } catch (error) {
+      console.error('[admin/ai] Demo discovery error:', error);
+      return res.status(500).json({
+        data: null,
+        error: { message: `Demo AI failed: ${error.message}` },
+        meta: {},
+      });
+    }
+
+    if (deals.length === 0) {
+      return res.json({
+        data: {
+          message: 'No demo deals generated (no verified businesses or LLM returned empty).',
+          dealCount: 0,
+        },
+        error: null,
+        meta: {},
+      });
+    }
+
+    const ingestionDeals = deals.map((deal) => ({
+      merchantAlias: deal.merchantName || 'Unknown Merchant',
+      rawPayload: {
+        title: deal.title,
+        description: deal.description,
+        category: deal.category,
+        address: deal.address,
+        city: deal.city || deal.location?.split(',')[0],
+        state: deal.state || 'MI',
+        postalCode: deal.postalCode,
+        latitude: deal.latitude,
+        longitude: deal.longitude,
+        startDate: deal.startDate,
+        endDate: deal.endDate,
+        price: deal.price,
+        discountPercentage: deal.discountPercentage,
+        sourceUrl: deal.sourceUrl,
+        syntheticDeal: true,
+        dataSource: 'ai_demo_synthetic',
+        googlePlaceId: deal.googlePlacesId || null,
+      },
+      normalizedPayload: {
+        title: deal.title,
+        category: deal.category,
+        syntheticDeal: true,
+        dealVerified: false,
+        merchantVerified: !!deal.merchantVerified,
+        location: {
+          city: deal.city || deal.location?.split(',')[0],
+          state: deal.state || 'MI',
+          latitude: deal.latitude,
+          longitude: deal.longitude,
+        },
+        ...(deal.discountPercentage
+          ? {
+              discount: {
+                type: 'percentage',
+                value: deal.discountPercentage,
+              },
+            }
+          : {}),
+        ...(deal.price
+          ? {
+              price: {
+                currency: 'USD',
+                amount: parseFloat(String(deal.price).replace('$', '')) || null,
+              },
+            }
+          : {}),
+      },
+      confidence: deal.confidence || 0.75,
+    }));
+
+    const result = await processIngestionJob({
+      source: 'ai:deal-fetching-agent:demo',
+      scope: 'demo-presentation',
+      deals: ingestionDeals,
+    });
+
+    res.json({
+      data: {
+        message: `Demo AI: ingested ${ingestionDeals.length} synthetic deal(s) for presentation — verify before promoting.`,
+        dealCount: ingestionDeals.length,
+        jobId: result.jobId,
+        stats: result.stats,
+      },
+      error: null,
+      meta: {},
+    });
+  } catch (error) {
+    console.error('[admin/ai] fetch-deals-demo error', error);
+    res.status(500).json({
+      data: null,
+      error: { message: error.message || 'Failed demo AI fetch' },
       meta: {},
     });
   }

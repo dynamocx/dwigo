@@ -415,6 +415,10 @@ async function executeToolCalls(toolCalls) {
 /**
  * Discover deals for pilot locations using LLM
  */
+/**
+ * DEMO / presentation: verified merchants from Places, then LLM *generates* plausible offers (not scraped).
+ * Ingest with source ai:deal-fetching-agent:demo — treat as synthetic until manually validated.
+ */
 async function discoverDealsForPilotLocations(options = {}) {
   const { categories = ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation = 10 } = options;
 
@@ -423,7 +427,7 @@ async function discoverDealsForPilotLocations(options = {}) {
     return [];
   }
 
-  console.log(`[DealFetchingAgent] Starting discovery for ${PILOT_LOCATIONS.length} locations, ${categories.length} categories`);
+  console.log(`[DealFetchingAgent] DEMO synthetic discovery for ${PILOT_LOCATIONS.length} locations, ${categories.length} categories`);
 
   const allDeals = [];
 
@@ -677,7 +681,132 @@ ALL DATES MUST BE IN ${currentYear}. Return JSON array only, no markdown, no exp
     allDeals.push(...locationDeals);
   }
 
-  console.log(`[DealFetchingAgent] Total deals discovered: ${allDeals.length}`);
+  console.log(`[DealFetchingAgent] Total DEMO deals discovered: ${allDeals.length}`);
+  return allDeals;
+}
+
+/**
+ * REAL path: same pilot locations + Places search, then fetch each merchant's **website** (static HTML)
+ * and run strict LLM **extraction** only (no invented offers). Skips businesses without a website.
+ */
+async function discoverRealDealsFromVerifiedWebsites(options = {}) {
+  function extractionLlmConfigured() {
+    return (
+      !!process.env.OPENAI_API_KEY?.trim() ||
+      (process.env.EXTRACTION_USE_CLAUDE === 'true' && !!process.env.ANTHROPIC_API_KEY?.trim())
+    );
+  }
+
+  const { categories = ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation = 8 } = options;
+
+  if (!extractionLlmConfigured()) {
+    console.warn('[RealDealFetch] No extraction LLM (OPENAI_API_KEY or EXTRACTION_USE_CLAUDE + ANTHROPIC_API_KEY)');
+    return [];
+  }
+
+  if (!process.env.GOOGLE_PLACES_API_KEY?.trim()) {
+    console.warn('[RealDealFetch] GOOGLE_PLACES_API_KEY not set');
+    return [];
+  }
+
+  const { searchGooglePlaces, getGooglePlaceDetails } = require('../merchantValidation');
+  const { fetchStaticHtml } = require('../scrapers/baseScraper');
+  const { tryExtractSingleDealFromPage } = require('../scrapers/dealExtractor');
+
+  const allDeals = [];
+
+  for (const location of PILOT_LOCATIONS) {
+    const cityName = location.name.split(',')[0].trim();
+    const stateAbbr = location.name.split(',')[1]?.trim() || 'MI';
+
+    for (const category of categories) {
+      let searchQuery = `${category} in ${cityName}`;
+      if (category === 'Dining') {
+        searchQuery = `restaurants in ${cityName}`;
+      } else if (category === 'Shopping') {
+        searchQuery = `shopping stores in ${cityName}`;
+      } else if (category === 'Entertainment') {
+        searchQuery = `entertainment venues in ${cityName}`;
+      }
+
+      let placesResult;
+      try {
+        placesResult = await searchGooglePlaces(searchQuery, cityName, stateAbbr, { returnAll: true });
+      } catch (e) {
+        console.warn(`[RealDealFetch] Places search failed ${searchQuery}:`, e.message);
+        continue;
+      }
+
+      if (!placesResult?.results?.length) {
+        continue;
+      }
+
+      const slice = placesResult.results.slice(0, maxDealsPerLocation);
+
+      for (const place of slice) {
+        const placeId = place.placeId || place.place_id;
+        if (!placeId) continue;
+
+        let details;
+        try {
+          details = await getGooglePlaceDetails(placeId);
+        } catch (e) {
+          continue;
+        }
+
+        if (!details?.website) {
+          console.log(`[RealDealFetch] skip (no website): ${place.name}`);
+          await new Promise((r) => setTimeout(r, 200));
+          continue;
+        }
+
+        let fetchRes;
+        try {
+          fetchRes = await fetchStaticHtml(details.website, 15000);
+        } catch (e) {
+          fetchRes = { success: false };
+        }
+
+        if (!fetchRes.success || !fetchRes.html) {
+          await new Promise((r) => setTimeout(r, 400));
+          continue;
+        }
+
+        const deal = await tryExtractSingleDealFromPage(
+          place.name,
+          details.city || cityName,
+          details.state || stateAbbr,
+          fetchRes.html,
+          fetchRes.url || details.website,
+          {
+            category,
+            extractionMethod: 'ai-real+verified-website-llm',
+            confidence: 0.78,
+          }
+        );
+
+        if (deal) {
+          allDeals.push({
+            ...deal,
+            address: details.formatted_address || place.address,
+            latitude: details.lat ?? place.latitude ?? place.location?.lat,
+            longitude: details.lng ?? place.longitude ?? place.location?.lng,
+            syntheticDeal: false,
+            dealVerified: false,
+            merchantVerified: true,
+            googlePlacesId: placeId,
+            dataSource: 'verified_merchant_website',
+          });
+        }
+
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+
+  console.log(`[RealDealFetch] Total real extracted deals: ${allDeals.length}`);
   return allDeals;
 }
 
@@ -733,6 +862,7 @@ async function matchDealsToUser(userId, deals, userPreferences, userLocation, us
 
 module.exports = {
   discoverDealsForPilotLocations,
+  discoverRealDealsFromVerifiedWebsites,
   matchDealsToUser,
   toolImplementations,
 };

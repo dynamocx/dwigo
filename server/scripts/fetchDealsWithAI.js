@@ -1,13 +1,12 @@
 /**
- * AI-Powered Deal Fetching Script
- * 
- * Uses LLM to discover deals for Mid-Michigan pilot locations
- * 
+ * DEMO: synthetic deals for Places-verified merchants (same as admin "AI: Demo").
+ *
+ * For strict website extraction use the API POST /admin/ai/fetch-deals or the admin UI "AI: Real".
+ *
  * Usage:
  *   node scripts/fetchDealsWithAI.js
- * 
- * Requires:
- *   OPENAI_API_KEY environment variable
+ *
+ * Requires: OPENAI_API_KEY, GOOGLE_PLACES_API_KEY
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
@@ -81,9 +80,13 @@ async function main() {
     }));
 
     const payload = {
-      source: 'ai:deal-fetching-agent',
-      scope: 'mid-michigan-pilot',
-      deals: ingestionDeals,
+      source: 'ai:deal-fetching-agent:demo',
+      scope: 'demo-presentation-cli',
+      deals: ingestionDeals.map((row) => ({
+        ...row,
+        rawPayload: { ...row.rawPayload, syntheticDeal: true },
+        normalizedPayload: { ...row.normalizedPayload, syntheticDeal: true },
+      })),
     };
 
     const result = await processIngestionJob(payload);

@@ -189,9 +189,56 @@ function shouldRejectMerchant(validationResult) {
   };
 }
 
+/**
+ * Place Details (website, geometry, address) for a place_id — used for real web extraction paths.
+ */
+async function getGooglePlaceDetails(placeId) {
+  if (!GOOGLE_PLACES_API_KEY || !placeId) {
+    return null;
+  }
+
+  try {
+    const response = await axios.get(`${GOOGLE_PLACES_API_BASE}/details/json`, {
+      params: {
+        place_id: placeId,
+        fields: 'name,formatted_address,geometry,website,address_components,types',
+        key: GOOGLE_PLACES_API_KEY,
+      },
+      timeout: 15000,
+    });
+
+    if (response.data.status !== 'OK' || !response.data.result) {
+      return null;
+    }
+
+    const r = response.data.result;
+    let city = '';
+    let state = '';
+    for (const c of r.address_components || []) {
+      if (c.types?.includes('locality')) city = c.long_name;
+      if (c.types?.includes('administrative_area_level_1')) state = c.short_name || c.long_name;
+    }
+
+    return {
+      name: r.name,
+      formatted_address: r.formatted_address,
+      website: r.website || null,
+      lat: r.geometry?.location?.lat,
+      lng: r.geometry?.location?.lng,
+      types: r.types || [],
+      city,
+      state,
+    };
+  } catch (error) {
+    console.error('[merchantValidation] getGooglePlaceDetails error:', error.message);
+    return null;
+  }
+}
+
 module.exports = {
   validateMerchant,
   shouldRejectMerchant,
   searchGooglePlaces,
+  getGooglePlaceDetails,
 };
 

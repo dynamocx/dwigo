@@ -1,8 +1,8 @@
 /**
- * Google Places Posts Integration
- * 
- * Fetches business posts (offers, events, updates) from Google Places API
- * Priority: offers > events > updates
+ * Google Places Posts — legacy stub
+ *
+ * Standard Places API does not return GBP posts/offers. For optional Maps page text → LLM, see
+ * `googleMapsGbpSnippet.js` (ENABLE_GBP_MAPS_SCRAPE). For owner-managed data use Business Profile API + OAuth.
  */
 
 const axios = require('axios');

@@ -10,12 +10,72 @@ const axios = require('axios');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
 
+function useClaudeForExtraction() {
+  return process.env.EXTRACTION_USE_CLAUDE === 'true' && !!process.env.ANTHROPIC_API_KEY?.trim();
+}
+
+function extractionLlmConfigured() {
+  return !!OPENAI_API_KEY?.trim() || useClaudeForExtraction();
+}
+
+/**
+ * Call Anthropic Messages API (same messages shape as OpenAI chat, system extracted).
+ */
+async function callAnthropicForExtraction(messages, retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const BASE_DELAY = 2000;
+  const systemParts = messages.filter((m) => m.role === 'system').map((m) => m.content);
+  const system = systemParts.join('\n\n');
+  const other = messages.filter((m) => m.role !== 'system');
+  const anthropicMessages = other.map((m) => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.content,
+  }));
+
+  try {
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
+        temperature: 0.3,
+        system: system || 'You are a data extraction assistant.',
+        messages: anthropicMessages,
+      },
+      {
+        headers: {
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      }
+    );
+
+    const text = response.data?.content?.[0]?.text || '';
+    return { choices: [{ message: { content: text } }] };
+  } catch (error) {
+    const errorDetails = error.response?.data || {};
+    const errorCode = errorDetails.error?.type || error.response?.status;
+    if ((error.response?.status === 429 || errorCode === 'rate_limit_error') && retryCount < MAX_RETRIES) {
+      const delay = BASE_DELAY * 2 ** retryCount;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return callAnthropicForExtraction(messages, retryCount + 1);
+    }
+    throw error;
+  }
+}
+
 /**
  * Call OpenAI API for extraction with retry logic
  */
 async function callLLMForExtraction(messages, retryCount = 0) {
+  if (useClaudeForExtraction()) {
+    return callAnthropicForExtraction(messages, retryCount);
+  }
+
   if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY not configured');
+    throw new Error('OPENAI_API_KEY not configured (or set EXTRACTION_USE_CLAUDE=true with ANTHROPIC_API_KEY)');
   }
 
   const MAX_RETRIES = 3;
@@ -104,11 +164,14 @@ If no deal found in HTML, return: { "valid": false, "rejectionReason": "No deal 
 /**
  * Extract deal from HTML snippet using LLM
  */
-async function extractDealFromHtml(merchantName, city, state, htmlSnippet, sourceUrl) {
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('[dealExtractor] OPENAI_API_KEY not configured');
+async function extractDealFromHtml(merchantName, city, state, htmlSnippet, sourceUrl, options = {}) {
+  if (!extractionLlmConfigured()) {
+    console.warn('[dealExtractor] No LLM configured (OPENAI_API_KEY or Claude via EXTRACTION_USE_CLAUDE)');
     return { valid: false, rejectionReason: 'LLM not configured' };
   }
+
+  const maxChars = Math.min(Number(options.maxSnippetChars) || Number(process.env.EXTRACTION_HTML_MAX_CHARS) || 12000, 28000);
+  const clipped = htmlSnippet.length > maxChars ? `${htmlSnippet.substring(0, maxChars)}... (truncated)` : htmlSnippet;
 
   const messages = [
     {
@@ -124,7 +187,7 @@ SOURCE URL: ${sourceUrl}
 Extract deal information from this HTML snippet. The merchant is "${merchantName}" - use this exact name.
 
 HTML Snippet:
-${htmlSnippet.substring(0, 3000)} ${htmlSnippet.length > 3000 ? '... (truncated)' : ''}
+${clipped}
 
 IMPORTANT: 
 - The merchant name is "${merchantName}" - do not change it
@@ -299,11 +362,16 @@ async function processScrapedContent(scrapeResult) {
 /**
  * When selector-based chunks are empty, one LLM pass on a truncated page (discovery flow).
  */
-async function tryExtractSingleDealFromPage(merchantName, city, state, html, sourceUrl, maxChars = 14000) {
-  if (!html || !process.env.OPENAI_API_KEY) return null;
+async function tryExtractSingleDealFromPage(merchantName, city, state, html, sourceUrl, options = {}) {
+  const maxChars = options.maxChars ?? 14000;
+  if (!html || !extractionLlmConfigured()) return null;
   const compact = html.replace(/\s+/g, ' ').trim();
   const snippet = compact.slice(0, maxChars);
-  const extracted = await extractDealFromHtml(merchantName, city, state, snippet, sourceUrl);
+  const category = options.category || 'Dining';
+  const extractionMethod = options.extractionMethod || 'places-discovery+fullpage-llm';
+  const extracted = await extractDealFromHtml(merchantName, city, state, snippet, sourceUrl, {
+    maxSnippetChars: Math.min(maxChars, 12000),
+  });
   if (!extracted.valid || !extracted.title) return null;
 
   const now = new Date();
@@ -318,7 +386,7 @@ async function tryExtractSingleDealFromPage(merchantName, city, state, html, sou
   return {
     title: extracted.title,
     description: extracted.description || `${extracted.title} at ${merchantName}`,
-    category: 'Dining',
+    category,
     merchantName,
     city,
     state,
@@ -328,9 +396,9 @@ async function tryExtractSingleDealFromPage(merchantName, city, state, html, sou
     startDate,
     endDate,
     sourceUrl,
-    confidence: 0.72,
+    confidence: options.confidence ?? 0.72,
     requiresValidation: true,
-    extractionMethod: 'places-discovery+fullpage-llm',
+    extractionMethod,
   };
 }
 
