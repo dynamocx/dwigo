@@ -125,9 +125,14 @@ export const scrapeDealsFromWeb = () =>
 
 export interface DiscoverDiningScrapePayload {
   searchQuery?: string;
+  /** Override multi-query rotation (e.g. ["restaurant", "cafe", "brewery"]) */
+  searchQueries?: string[];
   nearText?: string;
   maxPlaces?: number;
   maxItemsPerSite?: number;
+  maxDealsPerVenue?: number;
+  maxFollowUpUrls?: number;
+  delayBetweenVenuesMs?: number;
 }
 
 export const discoverDiningFromPlaces = (payload: DiscoverDiningScrapePayload = {}) =>

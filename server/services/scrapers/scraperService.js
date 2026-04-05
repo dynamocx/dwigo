@@ -43,12 +43,80 @@ function loadDealSources() {
   }
 }
 
-/** Broad selectors for unknown restaurant homepages (discovery). */
+/** Selectors for unknown restaurant sites — homepage + common CMS/promo patterns. */
 const PLACES_DISCOVERY_SELECTORS = {
-  item: 'article, [class*="special"], [class*="event"], [class*="promo"], [class*="deal"], section, main > div',
-  title: 'h1, h2, h3',
-  desc: 'p',
+  item:
+    'article, [role="article"], main section, [class*="special"], [class*="happy"], [class*="offer"], [class*="promo"], [class*="deal"], [class*="event"], [class*="menu-item"], [class*="elementor"], .sqs-block-content, [data-testid*="menu"], section, main > div',
+  title: 'h1, h2, h3, h4, [class*="title"]',
+  desc: 'p, li, [class*="description"], [class*="excerpt"]',
 };
+
+/** Second-pass paths on same origin when homepage yields little promo content. */
+const DINING_FOLLOW_UP_PATHS = [
+  '/specials',
+  '/special-offers',
+  '/offers',
+  '/promotions',
+  '/events',
+  '/happy-hour',
+  '/happy-hour-specials',
+  '/menu',
+  '/lunch-specials',
+  '/dinner-specials',
+];
+
+function diningSiteOrigin(website) {
+  try {
+    const u = new URL(website);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return null;
+  }
+}
+
+function diningFollowUpUrls(website) {
+  const origin = diningSiteOrigin(website);
+  if (!origin) return [];
+  return DINING_FOLLOW_UP_PATHS.map((p) => `${origin}${p}`);
+}
+
+function mergeDealsDedupeByTitle(existing, incoming) {
+  const out = [...existing];
+  for (const m of incoming) {
+    if (!m?.title) continue;
+    const t = m.title.toLowerCase().trim();
+    if (out.some((d) => d.title && d.title.toLowerCase().trim() === t)) continue;
+    out.push(m);
+  }
+  return out;
+}
+
+function dedupeAllDealsByPlaceAndTitle(deals) {
+  const seen = new Set();
+  return deals.filter((d) => {
+    const t = (d.title || '').toLowerCase().trim();
+    if (!t) return false;
+    const k = `${d.googlePlaceId || ''}::${t}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+async function extractDealsFromRenderedScrape(p, scrapeResult, maxItemsPerSite) {
+  const sr = { ...scrapeResult };
+  if (sr.success && sr.extractedItems?.length > maxItemsPerSite) {
+    sr.extractedItems = sr.extractedItems.slice(0, maxItemsPerSite);
+  }
+  let deals = await processScrapedContent(sr);
+  if (deals.length === 0 && sr.success && sr.html) {
+    const one = await tryExtractSingleDealFromPage(p.name, p.city, p.state, sr.html, sr.url, {
+      category: 'Dining',
+    });
+    if (one) deals = [one];
+  }
+  return deals;
+}
 
 function buildIngestionDealsFromScraped(allDeals) {
   return allDeals.map((deal) => ({
@@ -152,13 +220,16 @@ async function discoverPlacesAndScrapeDining(options = {}) {
     };
   }
 
-  const maxItemsPerSite = Math.min(Math.max(Number(options.maxItemsPerSite) || 6, 1), 15);
-  const delayMs = Math.max(Number(options.delayBetweenVenuesMs) || 4500, 2000);
+  const maxItemsPerSite = Math.min(Math.max(Number(options.maxItemsPerSite) || 8, 1), 15);
+  const delayMs = Math.max(Number(options.delayBetweenVenuesMs) || 4000, 2000);
+  const maxDealsPerVenue = Math.min(Math.max(Number(options.maxDealsPerVenue) || 4, 1), 8);
+  const maxFollowUpUrls = Math.min(Math.max(Number(options.maxFollowUpUrls) || 8, 0), 12);
 
   let places;
   try {
     places = await discoverDiningPlaces({
       searchQuery: options.searchQuery,
+      searchQueries: options.searchQueries,
       nearText: options.nearText,
       maxPlaces: options.maxPlaces,
     });
@@ -208,22 +279,34 @@ async function discoverPlacesAndScrapeDining(options = {}) {
       continue;
     }
 
-    if (scrapeResult.success && scrapeResult.extractedItems?.length > maxItemsPerSite) {
-      scrapeResult.extractedItems = scrapeResult.extractedItems.slice(0, maxItemsPerSite);
-    }
+    let deals = await extractDealsFromRenderedScrape(p, scrapeResult, maxItemsPerSite);
 
-    let deals = await processScrapedContent(scrapeResult);
+    const homeUrlNorm = (scrapeResult.url || p.website || '').replace(/\/$/, '');
+    let followUpsTried = 0;
+    for (const extraUrl of diningFollowUpUrls(p.website)) {
+      if (deals.length >= maxDealsPerVenue) break;
+      if (followUpsTried >= maxFollowUpUrls) break;
+      const extraNorm = extraUrl.replace(/\/$/, '');
+      if (extraNorm === homeUrlNorm) continue;
 
-    if (deals.length === 0 && scrapeResult.success && scrapeResult.html) {
-      const one = await tryExtractSingleDealFromPage(
-        p.name,
-        p.city,
-        p.state,
-        scrapeResult.html,
-        scrapeResult.url,
-        { category: 'Dining' }
-      );
-      if (one) deals = [one];
+      followUpsTried += 1;
+      try {
+        const cfg = {
+          ...sourceConfig,
+          id: `${sourceConfig.id}_u${followUpsTried}`,
+          url: extraUrl,
+        };
+        const sr2 = await fetchDealSource(cfg);
+        if (!sr2.success || !sr2.html) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        const more = await extractDealsFromRenderedScrape(p, sr2, maxItemsPerSite);
+        deals = mergeDealsDedupeByTitle(deals, more);
+      } catch (e) {
+        console.warn(`[discoverPlacesAndScrapeDining] follow-up ${extraUrl}:`, e.message);
+      }
+      await new Promise((r) => setTimeout(r, 600));
     }
 
     let gbpText = null;
@@ -250,6 +333,10 @@ async function discoverPlacesAndScrapeDining(options = {}) {
         );
         if (!dup) deals.push(gbpDeal);
       }
+    }
+
+    if (deals.length > maxDealsPerVenue) {
+      deals = deals.slice(0, maxDealsPerVenue);
     }
 
     const enriched = deals.map((d) => ({
@@ -292,13 +379,18 @@ async function discoverPlacesAndScrapeDining(options = {}) {
 
   const scope = `dining:places-discovery:${options.nearText?.replace(/\s+/g, '-') || 'mi'}`;
 
-  const ing = await ingestScrapedDeals(allDeals, 'scraper:places-discovery', scope);
+  const deduped = dedupeAllDealsByPlaceAndTitle(allDeals);
+  if (deduped.length < allDeals.length) {
+    console.log(`[discoverPlacesAndScrapeDining] deduped ${allDeals.length - deduped.length} duplicate title(s) per place`);
+  }
+
+  const ing = await ingestScrapedDeals(deduped, 'scraper:places-discovery', scope);
 
   return {
     success: true,
     venuesFound: places.length,
     venuesScraped: results.length,
-    dealsExtracted: allDeals.length,
+    dealsExtracted: deduped.length,
     dealsIngested: ing.dealsIngested,
     jobId: ing.jobId,
     stats: ing.stats,

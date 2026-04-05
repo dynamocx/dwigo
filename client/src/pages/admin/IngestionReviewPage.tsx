@@ -130,10 +130,12 @@ const IngestionReviewPage = () => {
   const discoverDiningMutation = useMutation({
     mutationFn: () =>
       discoverDiningFromPlaces({
-        searchQuery: 'restaurant',
-        nearText: 'Lansing Flint Michigan',
-        maxPlaces: 12,
-        maxItemsPerSite: 6,
+        nearText:
+          'Lansing Flint Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
+        maxPlaces: 28,
+        maxItemsPerSite: 8,
+        maxDealsPerVenue: 4,
+        maxFollowUpUrls: 8,
       }),
     onSuccess: () => {
       setTimeout(() => {

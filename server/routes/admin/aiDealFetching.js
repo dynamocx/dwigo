@@ -474,9 +474,12 @@ router.post('/discover-dining-scrape', async (req, res) => {
     const body = req.body || {};
     const result = await discoverPlacesAndScrapeDining({
       searchQuery: body.searchQuery,
+      searchQueries: Array.isArray(body.searchQueries) ? body.searchQueries : undefined,
       nearText: body.nearText,
       maxPlaces: body.maxPlaces,
       maxItemsPerSite: body.maxItemsPerSite,
+      maxDealsPerVenue: body.maxDealsPerVenue,
+      maxFollowUpUrls: body.maxFollowUpUrls,
       delayBetweenVenuesMs: body.delayBetweenVenuesMs,
     });
 
