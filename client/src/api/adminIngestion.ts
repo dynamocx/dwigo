@@ -127,7 +127,12 @@ export interface DiscoverDiningScrapePayload {
   searchQuery?: string;
   /** Override multi-query rotation (e.g. ["restaurant", "cafe", "brewery"]) */
   searchQueries?: string[];
+  /** Full bias string; ignored if `cities` is set */
   nearText?: string;
+  /** 2–4 city names — builds "CityA CityB Michigan" (recommended; faster than huge nearText) */
+  cities?: string[];
+  /** Cap how many Places query variants run (default 5 with cities, 8 without) */
+  queryRotationLimit?: number;
   maxPlaces?: number;
   maxItemsPerSite?: number;
   maxDealsPerVenue?: number;

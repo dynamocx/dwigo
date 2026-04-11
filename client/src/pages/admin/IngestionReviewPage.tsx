@@ -6,7 +6,11 @@ import {
   Button,
   Chip,
   Divider,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
   Typography,
   Tabs,
@@ -33,8 +37,71 @@ import {
   fetchDealsWithAIDemo,
   scrapeDealsFromWeb,
   discoverDiningFromPlaces,
+  type DiscoverDiningScrapePayload,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
+
+const DISCOVER_PRESET_IDS = ['flint', 'lansing', 'saginaw', 'east', 'kalamazoo', 'wide'] as const;
+type DiscoverPresetId = (typeof DISCOVER_PRESET_IDS)[number];
+
+/** Few cities per run = faster, more reliable jobs than one huge nearText. Run multiple presets over time. */
+const DISCOVER_PRESETS: Record<DiscoverPresetId, DiscoverDiningScrapePayload> = {
+  flint: {
+    cities: ['Flint', 'Grand Blanc', 'Fenton'],
+    maxPlaces: 14,
+    queryRotationLimit: 5,
+    maxFollowUpUrls: 5,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 3500,
+  },
+  lansing: {
+    cities: ['Lansing', 'East Lansing', 'Okemos'],
+    maxPlaces: 14,
+    queryRotationLimit: 5,
+    maxFollowUpUrls: 5,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 3500,
+  },
+  saginaw: {
+    cities: ['Saginaw', 'Midland', 'Bay City'],
+    maxPlaces: 14,
+    queryRotationLimit: 5,
+    maxFollowUpUrls: 5,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 3500,
+  },
+  east: {
+    cities: ['Frankenmuth', 'Owosso', 'Corunna'],
+    maxPlaces: 12,
+    queryRotationLimit: 4,
+    maxFollowUpUrls: 4,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 3500,
+  },
+  kalamazoo: {
+    cities: ['Kalamazoo', 'Portage', 'Battle Creek'],
+    maxPlaces: 14,
+    queryRotationLimit: 5,
+    maxFollowUpUrls: 5,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 3500,
+  },
+  wide: {
+    nearText:
+      'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
+    maxPlaces: 18,
+    queryRotationLimit: 6,
+    maxFollowUpUrls: 6,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 4000,
+  },
+};
 import { assessDealQuality } from '@/utils/dealQuality';
 import DealEntryForm from './DealEntryForm';
 
@@ -55,6 +122,7 @@ const IngestionReviewPage = () => {
   const [limit] = useState(50);
   const [tabValue, setTabValue] = useState(0); // 0 = Auto-Seeding, 1 = Add Deals
   const [selectedDeals, setSelectedDeals] = useState<number[]>([]);
+  const [discoverPreset, setDiscoverPreset] = useState<DiscoverPresetId>('flint');
 
   const pendingQuery = useQuery({
     queryKey: ['admin-ingestion-pending', limit],
@@ -128,15 +196,7 @@ const IngestionReviewPage = () => {
   });
 
   const discoverDiningMutation = useMutation({
-    mutationFn: () =>
-      discoverDiningFromPlaces({
-        nearText:
-          'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
-        maxPlaces: 28,
-        maxItemsPerSite: 8,
-        maxDealsPerVenue: 4,
-        maxFollowUpUrls: 8,
-      }),
+    mutationFn: () => discoverDiningFromPlaces(DISCOVER_PRESETS[discoverPreset]),
     onSuccess: () => {
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ['admin-ingestion-pending', limit] });
@@ -322,9 +382,28 @@ const IngestionReviewPage = () => {
               Automated Deal Seeding
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Discover Dining runs on the server for many minutes (Places + Playwright + follow-up URLs). Keep this tab open
-              until it finishes; the UI polls so you won’t get a network timeout. Optional Maps text if ENABLE_GBP_MAPS_SCRAPE.
+              Pick a <strong>2–3 city</strong> batch per run (faster and more reliable than one giant area). Rotate presets
+              every few days or after deploys. Wide (slow) hits many metros in one job. Keep this tab open until the job
+              finishes; the UI polls the server. Optional Maps text if ENABLE_GBP_MAPS_SCRAPE.
             </Typography>
+
+            <FormControl size="small" sx={{ maxWidth: 420 }}>
+              <InputLabel id="discover-dining-area-label">Discover Dining area</InputLabel>
+              <Select
+                labelId="discover-dining-area-label"
+                label="Discover Dining area"
+                value={discoverPreset}
+                onChange={(e) => setDiscoverPreset(e.target.value as DiscoverPresetId)}
+                disabled={discoverDiningMutation.isPending}
+              >
+                <MenuItem value="flint">Flint · Grand Blanc · Fenton</MenuItem>
+                <MenuItem value="lansing">Lansing · East Lansing · Okemos</MenuItem>
+                <MenuItem value="saginaw">Saginaw · Midland · Bay City</MenuItem>
+                <MenuItem value="east">Frankenmuth · Owosso · Corunna</MenuItem>
+                <MenuItem value="kalamazoo">Kalamazoo · Portage · Battle Creek</MenuItem>
+                <MenuItem value="wide">Wide (all major pilot cities — slow)</MenuItem>
+              </Select>
+            </FormControl>
 
             <Stack direction="row" spacing={2} flexWrap="wrap">
               <Button

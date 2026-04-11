@@ -223,7 +223,12 @@ async function discoverPlacesAndScrapeDining(options = {}) {
   const maxItemsPerSite = Math.min(Math.max(Number(options.maxItemsPerSite) || 8, 1), 15);
   const delayMs = Math.max(Number(options.delayBetweenVenuesMs) || 4000, 2000);
   const maxDealsPerVenue = Math.min(Math.max(Number(options.maxDealsPerVenue) || 4, 1), 8);
-  const maxFollowUpUrls = Math.min(Math.max(Number(options.maxFollowUpUrls) || 8, 0), 12);
+  const hasCityBatch = Array.isArray(options.cities) && options.cities.length > 0;
+  const defaultFollowUps = hasCityBatch ? 5 : 6;
+  const maxFollowUpUrls = Math.min(
+    Math.max(Number(options.maxFollowUpUrls) || defaultFollowUps, 0),
+    12
+  );
 
   let places;
   try {
@@ -231,6 +236,8 @@ async function discoverPlacesAndScrapeDining(options = {}) {
       searchQuery: options.searchQuery,
       searchQueries: options.searchQueries,
       nearText: options.nearText,
+      cities: options.cities,
+      queryRotationLimit: options.queryRotationLimit,
       maxPlaces: options.maxPlaces,
     });
   } catch (e) {
@@ -377,7 +384,11 @@ async function discoverPlacesAndScrapeDining(options = {}) {
     };
   }
 
-  const scope = `dining:places-discovery:${options.nearText?.replace(/\s+/g, '-') || 'mi'}`;
+  const scopeLabel =
+    (options.nearText && String(options.nearText).trim()) ||
+    (options.cities?.length ? options.cities.join(' ') : '') ||
+    'mi';
+  const scope = `dining:places-discovery:${scopeLabel.replace(/\s+/g, '-')}`;
 
   const deduped = dedupeAllDealsByPlaceAndTitle(allDeals);
   if (deduped.length < allDeals.length) {

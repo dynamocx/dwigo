@@ -45,6 +45,8 @@ function buildDiscoverDiningOptions(body) {
     searchQuery: body.searchQuery,
     searchQueries: Array.isArray(body.searchQueries) ? body.searchQueries : undefined,
     nearText: body.nearText,
+    cities: Array.isArray(body.cities) ? body.cities.map((c) => String(c).trim()).filter(Boolean) : undefined,
+    queryRotationLimit: body.queryRotationLimit,
     maxPlaces: body.maxPlaces,
     maxItemsPerSite: body.maxItemsPerSite,
     maxDealsPerVenue: body.maxDealsPerVenue,

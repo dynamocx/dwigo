@@ -8,10 +8,30 @@ const axios = require('axios');
 
 const PLACES_BASE = 'https://maps.googleapis.com/maps/api/place';
 
-/** Default geographic bias for Mid-Michigan + extended pilot (single text-search bias string). */
+/** Fallback when neither `cities` nor `nearText` is passed (keep smaller to avoid huge jobs). */
 const DEFAULT_NEAR_TEXT =
-  process.env.PLACES_DINING_NEAR_TEXT?.trim() ||
-  'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan';
+  process.env.PLACES_DINING_NEAR_TEXT?.trim() || 'Lansing Flint Grand Blanc Michigan';
+
+/**
+ * @param {string[]} cities
+ * @returns {string}
+ */
+function nearTextFromCities(cities) {
+  const parts = (cities || []).map((c) => String(c).trim()).filter(Boolean);
+  if (parts.length === 0) return '';
+  const joined = parts.join(' ');
+  if (/\b(MI|Michigan)\b/i.test(joined)) return joined;
+  return `${joined} Michigan`;
+}
+
+function resolveNearText(options) {
+  if (Array.isArray(options.cities) && options.cities.length > 0) {
+    return nearTextFromCities(options.cities);
+  }
+  const nt = (options.nearText || '').trim();
+  if (nt) return nt;
+  return DEFAULT_NEAR_TEXT;
+}
 
 /** Rotate queries to diversify venues (same region, different result sets). */
 const DEFAULT_SEARCH_QUERIES = [
@@ -129,8 +149,10 @@ async function appendPlacesForQuery(places, seen, fullQuery, maxPlaces, key, nea
  * @param {object} options
  * @param {string} [options.searchQuery] - primary query (used with multi-query rotation if searchQueries omitted)
  * @param {string[]} [options.searchQueries] - override rotation list
- * @param {string} [options.nearText] - geographic bias
- * @param {number} [options.maxPlaces] - cap (default 24, max 45)
+ * @param {string} [options.nearText] - geographic bias (ignored if `cities` is non-empty)
+ * @param {string[]} [options.cities] - e.g. ["Flint","Grand Blanc","Fenton"] — scope Places to a few cities per run
+ * @param {number} [options.queryRotationLimit] - max number of search queries to run (default: 5 if cities set, else 8)
+ * @param {number} [options.maxPlaces] - cap (default 16 if cities set, else 22; max 45)
  */
 async function discoverDiningPlaces(options = {}) {
   const key = process.env.GOOGLE_PLACES_API_KEY;
@@ -138,8 +160,10 @@ async function discoverDiningPlaces(options = {}) {
     throw new Error('GOOGLE_PLACES_API_KEY is not configured');
   }
 
-  const nearText = (options.nearText || DEFAULT_NEAR_TEXT).trim();
-  const maxPlaces = Math.min(Math.max(Number(options.maxPlaces) || 24, 1), 45);
+  const nearText = resolveNearText(options);
+  const hasCityBatch = Array.isArray(options.cities) && options.cities.length > 0;
+  const defaultMax = hasCityBatch ? 16 : 22;
+  const maxPlaces = Math.min(Math.max(Number(options.maxPlaces) || defaultMax, 1), 45);
 
   let queries =
     Array.isArray(options.searchQueries) && options.searchQueries.length > 0
@@ -150,6 +174,12 @@ async function discoverDiningPlaces(options = {}) {
     const primary = (options.searchQuery || 'restaurant').trim();
     queries = [primary, ...DEFAULT_SEARCH_QUERIES.filter((q) => q.toLowerCase() !== primary.toLowerCase())];
   }
+
+  let rotationLimit = Number(options.queryRotationLimit);
+  if (!Number.isFinite(rotationLimit) || rotationLimit < 1) {
+    rotationLimit = hasCityBatch ? 5 : 8;
+  }
+  queries = queries.slice(0, Math.min(rotationLimit, queries.length));
 
   const places = [];
   const seen = new Set();
@@ -169,5 +199,7 @@ async function discoverDiningPlaces(options = {}) {
 module.exports = {
   discoverDiningPlaces,
   normalizeWebsite,
+  nearTextFromCities,
+  resolveNearText,
   DEFAULT_NEAR_TEXT,
 };
