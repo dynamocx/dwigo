@@ -40,8 +40,18 @@ import {
   type DiscoverDiningScrapePayload,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
+import { assessDealQuality } from '@/utils/dealQuality';
+import DealEntryForm from './DealEntryForm';
 
-const DISCOVER_PRESET_IDS = ['flint', 'lansing', 'saginaw', 'east', 'kalamazoo', 'wide'] as const;
+const DISCOVER_PRESET_IDS = [
+  'flint',
+  'lansing',
+  'saginaw',
+  'frankenmuth',
+  'east',
+  'kalamazoo',
+  'wide',
+] as const;
 type DiscoverPresetId = (typeof DISCOVER_PRESET_IDS)[number];
 
 /** Few cities per run = faster, more reliable jobs than one huge nearText. Run multiple presets over time. */
@@ -73,8 +83,17 @@ const DISCOVER_PRESETS: Record<DiscoverPresetId, DiscoverDiningScrapePayload> = 
     maxItemsPerSite: 8,
     delayBetweenVenuesMs: 3500,
   },
+  frankenmuth: {
+    cities: ['Frankenmuth', 'Bridgeport', 'Birch Run'],
+    maxPlaces: 14,
+    queryRotationLimit: 5,
+    maxFollowUpUrls: 5,
+    maxDealsPerVenue: 3,
+    maxItemsPerSite: 8,
+    delayBetweenVenuesMs: 3500,
+  },
   east: {
-    cities: ['Frankenmuth', 'Owosso', 'Corunna'],
+    cities: ['Owosso', 'Corunna', 'Durand'],
     maxPlaces: 12,
     queryRotationLimit: 4,
     maxFollowUpUrls: 4,
@@ -93,7 +112,7 @@ const DISCOVER_PRESETS: Record<DiscoverPresetId, DiscoverDiningScrapePayload> = 
   },
   wide: {
     nearText:
-      'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
+      'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Bridgeport Birch Run Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
     maxPlaces: 18,
     queryRotationLimit: 6,
     maxFollowUpUrls: 6,
@@ -102,8 +121,6 @@ const DISCOVER_PRESETS: Record<DiscoverPresetId, DiscoverDiningScrapePayload> = 
     delayBetweenVenuesMs: 4000,
   },
 };
-import { assessDealQuality } from '@/utils/dealQuality';
-import DealEntryForm from './DealEntryForm';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -399,7 +416,8 @@ const IngestionReviewPage = () => {
                 <MenuItem value="flint">Flint · Grand Blanc · Fenton</MenuItem>
                 <MenuItem value="lansing">Lansing · East Lansing · Okemos</MenuItem>
                 <MenuItem value="saginaw">Saginaw · Midland · Bay City</MenuItem>
-                <MenuItem value="east">Frankenmuth · Owosso · Corunna</MenuItem>
+                <MenuItem value="frankenmuth">Frankenmuth · Bridgeport · Birch Run</MenuItem>
+                <MenuItem value="east">Owosso · Corunna · Durand</MenuItem>
                 <MenuItem value="kalamazoo">Kalamazoo · Portage · Battle Creek</MenuItem>
                 <MenuItem value="wide">Wide (all major pilot cities — slow)</MenuItem>
               </Select>
