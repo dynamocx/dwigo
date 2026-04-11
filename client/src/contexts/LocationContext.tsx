@@ -8,13 +8,27 @@ export interface Location {
   radius?: number; // in km, defaults to 15
 }
 
-// Predefined locations for Mid-Michigan
+// Predefined locations for Mid-Michigan (aligned with admin Discover Dining area presets)
 export const PRESET_LOCATIONS: Location[] = [
   {
     id: 'lansing',
     name: 'Lansing, MI',
     latitude: 42.7325,
     longitude: -84.5555,
+    radius: 15,
+  },
+  {
+    id: 'east-lansing',
+    name: 'East Lansing, MI',
+    latitude: 42.7364,
+    longitude: -84.4839,
+    radius: 15,
+  },
+  {
+    id: 'okemos',
+    name: 'Okemos, MI',
+    latitude: 42.7073,
+    longitude: -84.4274,
     radius: 15,
   },
   {
@@ -35,7 +49,91 @@ export const PRESET_LOCATIONS: Location[] = [
     id: 'fenton',
     name: 'Fenton, MI',
     latitude: 42.7978,
-    longitude: -83.7050,
+    longitude: -83.705,
+    radius: 15,
+  },
+  {
+    id: 'saginaw',
+    name: 'Saginaw, MI',
+    latitude: 43.4194,
+    longitude: -83.9508,
+    radius: 15,
+  },
+  {
+    id: 'midland',
+    name: 'Midland, MI',
+    latitude: 43.6156,
+    longitude: -84.2472,
+    radius: 15,
+  },
+  {
+    id: 'bay-city',
+    name: 'Bay City, MI',
+    latitude: 43.5945,
+    longitude: -83.8889,
+    radius: 15,
+  },
+  {
+    id: 'frankenmuth',
+    name: 'Frankenmuth, MI',
+    latitude: 43.3317,
+    longitude: -83.738,
+    radius: 15,
+  },
+  {
+    id: 'bridgeport',
+    name: 'Bridgeport, MI',
+    latitude: 43.3592,
+    longitude: -83.8816,
+    radius: 15,
+  },
+  {
+    id: 'birch-run',
+    name: 'Birch Run, MI',
+    latitude: 43.2509,
+    longitude: -83.7441,
+    radius: 15,
+  },
+  {
+    id: 'owosso',
+    name: 'Owosso, MI',
+    latitude: 42.9978,
+    longitude: -84.1766,
+    radius: 15,
+  },
+  {
+    id: 'corunna',
+    name: 'Corunna, MI',
+    latitude: 42.9828,
+    longitude: -84.1177,
+    radius: 15,
+  },
+  {
+    id: 'durand',
+    name: 'Durand, MI',
+    latitude: 42.9114,
+    longitude: -83.9847,
+    radius: 15,
+  },
+  {
+    id: 'kalamazoo',
+    name: 'Kalamazoo, MI',
+    latitude: 42.2917,
+    longitude: -85.5872,
+    radius: 15,
+  },
+  {
+    id: 'portage',
+    name: 'Portage, MI',
+    latitude: 42.2009,
+    longitude: -85.588,
+    radius: 15,
+  },
+  {
+    id: 'battle-creek',
+    name: 'Battle Creek, MI',
+    latitude: 42.3212,
+    longitude: -85.1797,
     radius: 15,
   },
 ];
