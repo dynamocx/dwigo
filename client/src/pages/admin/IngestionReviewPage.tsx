@@ -507,6 +507,12 @@ const IngestionReviewPage = () => {
                 {seedMutation.isPending ? 'Seeding...' : 'Seed Test Deals'}
               </Button>
             </Stack>
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
+              <strong>Scrape Deals from Web</strong> runs <code>server/config/dealSources.json</code> only (fixed
+              merchants/URLs/selectors — mostly mid-Michigan pilot sites). It does <strong>not</strong> follow the
+              Discover Dining area menu. For Frankenmuth · Birch Run · Bridgeport venues, use{' '}
+              <strong>Discover Dining</strong>.
+            </Typography>
           </Stack>
 
           {rows.length === 0 && !pendingQuery.isLoading ? (
