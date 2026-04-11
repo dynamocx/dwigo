@@ -59,8 +59,14 @@ const DealsPage = () => {
   });
 
   const personalisedDealsQuery = useQuery({
-    queryKey: ['personalised-deals'],
-    queryFn: fetchPersonalisedDeals,
+    queryKey: ['personalised-deals', locationParam, selectedLocation?.radius, selectedCategory],
+    queryFn: () =>
+      fetchPersonalisedDeals({
+        ...(locationParam
+          ? { location: locationParam, radius: selectedLocation?.radius ?? 15 }
+          : {}),
+        ...(selectedCategory ? { category: selectedCategory.toLowerCase() } : {}),
+      }),
     enabled: Boolean(user),
   });
 
@@ -205,7 +211,6 @@ const DealsPage = () => {
     }
   }, [selectedCategory, trackEvent]);
 
-  const recommendedByFeed = dealsQuery.data?.meta?.recommended_by ?? null;
   const recommendedByPersonal = personalisedDealsQuery.data?.meta?.recommended_by ?? null;
 
   if (dealsQuery.isError) {
@@ -272,16 +277,18 @@ const DealsPage = () => {
         <Typography variant="body2" color="text.secondary">
           Discover personalized savings around your favorite places.
         </Typography>
-        {recommendedByFeed ? (
-          <Typography variant="caption" color="text.secondary">
-            Powered by {recommendedByFeed}
-          </Typography>
-        ) : null}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          Powered by DealStream
+        </Typography>
       </Box>
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         {categoryChips}
       </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, mb: 0.5 }}>
+        Categories filter both <strong>Recommended for you</strong> and <strong>All deals</strong>. Set your area
+        with the location control in the header.
+      </Typography>
 
       {user ? (
         <Box mt={4}>

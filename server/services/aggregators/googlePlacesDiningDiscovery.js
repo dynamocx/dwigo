@@ -11,7 +11,7 @@ const PLACES_BASE = 'https://maps.googleapis.com/maps/api/place';
 /** Default geographic bias for Mid-Michigan + extended pilot (single text-search bias string). */
 const DEFAULT_NEAR_TEXT =
   process.env.PLACES_DINING_NEAR_TEXT?.trim() ||
-  'Lansing Flint Fenton Grand Rapids Kalamazoo Ann Arbor Michigan';
+  'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan';
 
 /** Rotate queries to diversify venues (same region, different result sets). */
 const DEFAULT_SEARCH_QUERIES = [

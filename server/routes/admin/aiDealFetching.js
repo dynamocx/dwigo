@@ -4,6 +4,7 @@
  * Endpoints:
  * - POST /admin/ai/fetch-deals — Real: Places + merchant website → strict LLM extraction
  * - POST /admin/ai/fetch-deals-demo — Demo: synthetic offers for verified merchant names (presentations)
+ * - POST /admin/ai/discover-dining-scrape — Async job (202) by default; GET .../job/:id to poll
  * - POST /admin/ai/match-deals — Match existing deals to users with LLM
  */
 
@@ -23,6 +24,34 @@ const router = express.Router();
 
 const ADMIN_HEADER = 'x-admin-token';
 const adminToken = process.env.ADMIN_API_TOKEN;
+
+/** In-memory jobs for long-running discover-dining (avoids browser/proxy timeouts). Single-instance only. */
+const discoverDiningJobs = new Map();
+const DISCOVER_JOB_TTL_MS = 2 * 60 * 60 * 1000;
+
+function pruneDiscoverDiningJobs() {
+  const cutoff = Date.now() - DISCOVER_JOB_TTL_MS;
+  for (const [id, job] of discoverDiningJobs) {
+    if ((job.createdAt || 0) < cutoff) discoverDiningJobs.delete(id);
+  }
+}
+
+function newDiscoverJobId() {
+  return `dd_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildDiscoverDiningOptions(body) {
+  return {
+    searchQuery: body.searchQuery,
+    searchQueries: Array.isArray(body.searchQueries) ? body.searchQueries : undefined,
+    nearText: body.nearText,
+    maxPlaces: body.maxPlaces,
+    maxItemsPerSite: body.maxItemsPerSite,
+    maxDealsPerVenue: body.maxDealsPerVenue,
+    maxFollowUpUrls: body.maxFollowUpUrls,
+    delayBetweenVenuesMs: body.delayBetweenVenuesMs,
+  };
+}
 
 const requireAdminToken = (req, res, next) => {
   console.log(`[admin/ai] Request received: ${req.method} ${req.path}`);
@@ -452,6 +481,8 @@ router.post('/scrape-deals', async (req, res) => {
 });
 
 // Google Places dining discovery → scrape each venue website → ingest (pending review)
+// Default: async job (202 + jobId) — full run can take 20–40+ minutes; sync HTTP hits "Network Error" on clients/proxies.
+// Sync (wait for full result): POST body `{ ..., "wait": true }` or query `?wait=1` (curl / scripts only).
 router.post('/discover-dining-scrape', async (req, res) => {
   console.log('[admin/ai] /discover-dining-scrape hit');
 
@@ -472,16 +503,61 @@ router.post('/discover-dining-scrape', async (req, res) => {
     }
 
     const body = req.body || {};
-    const result = await discoverPlacesAndScrapeDining({
-      searchQuery: body.searchQuery,
-      searchQueries: Array.isArray(body.searchQueries) ? body.searchQueries : undefined,
-      nearText: body.nearText,
-      maxPlaces: body.maxPlaces,
-      maxItemsPerSite: body.maxItemsPerSite,
-      maxDealsPerVenue: body.maxDealsPerVenue,
-      maxFollowUpUrls: body.maxFollowUpUrls,
-      delayBetweenVenuesMs: body.delayBetweenVenuesMs,
-    });
+    const opts = buildDiscoverDiningOptions(body);
+    const waitSync = body.wait === true || req.query.wait === '1' || req.query.sync === '1';
+
+    if (!waitSync) {
+      pruneDiscoverDiningJobs();
+      const jobId = newDiscoverJobId();
+      discoverDiningJobs.set(jobId, {
+        status: 'queued',
+        createdAt: Date.now(),
+      });
+
+      setImmediate(() => {
+        const entry = discoverDiningJobs.get(jobId);
+        discoverDiningJobs.set(jobId, {
+          ...entry,
+          status: 'running',
+          startedAt: Date.now(),
+        });
+        discoverPlacesAndScrapeDining(opts)
+          .then((result) => {
+            discoverDiningJobs.set(jobId, {
+              createdAt: entry.createdAt,
+              status: 'completed',
+              result,
+              finishedAt: Date.now(),
+            });
+            console.log(`[admin/ai] discover-dining job ${jobId} completed`, {
+              success: result.success,
+              dealsIngested: result.dealsIngested,
+            });
+          })
+          .catch((err) => {
+            console.error(`[admin/ai] discover-dining job ${jobId} failed`, err);
+            discoverDiningJobs.set(jobId, {
+              createdAt: entry.createdAt,
+              status: 'failed',
+              error: err.message || String(err),
+              finishedAt: Date.now(),
+            });
+          });
+      });
+
+      return res.status(202).json({
+        data: {
+          jobId,
+          status: 'queued',
+          message:
+            'Discovery job started. Poll GET /admin/ai/discover-dining-scrape/job/:jobId until status is completed or failed (runs many minutes).',
+        },
+        error: null,
+        meta: {},
+      });
+    }
+
+    const result = await discoverPlacesAndScrapeDining(opts);
 
     if (!result.success) {
       return res.status(200).json({
@@ -510,6 +586,42 @@ router.post('/discover-dining-scrape', async (req, res) => {
       meta: {},
     });
   }
+});
+
+router.get('/discover-dining-scrape/job/:jobId', (req, res) => {
+  const job = discoverDiningJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({
+      data: null,
+      error: { message: 'Job not found or expired' },
+      meta: {},
+    });
+  }
+  const payload = {
+    jobId: req.params.jobId,
+    status: job.status,
+    createdAt: job.createdAt,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+  };
+  if (job.status === 'completed' && job.result) {
+    payload.result = job.result;
+    const r = job.result;
+    if (r.success) {
+      payload.message = `Discovered ${r.venuesFound} venues with sites, extracted ${r.dealsExtracted} deals, ingested ${r.dealsIngested} pending rows.`;
+    } else {
+      payload.message = r.error || 'Discovery completed with no deals ingested';
+    }
+  }
+  if (job.status === 'failed') {
+    payload.error = job.error;
+    payload.message = job.error || 'Discovery job failed';
+  }
+  res.json({
+    data: payload,
+    error: null,
+    meta: {},
+  });
 });
 
 // Fetch deals from Eventbrite

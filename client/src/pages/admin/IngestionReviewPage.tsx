@@ -131,7 +131,7 @@ const IngestionReviewPage = () => {
     mutationFn: () =>
       discoverDiningFromPlaces({
         nearText:
-          'Lansing Flint Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
+          'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
         maxPlaces: 28,
         maxItemsPerSite: 8,
         maxDealsPerVenue: 4,
@@ -322,8 +322,8 @@ const IngestionReviewPage = () => {
               Automated Deal Seeding
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Discover Dining uses Places + merchant sites (optional Maps-visible text if ENABLE_GBP_MAPS_SCRAPE). AI Real =
-              website extraction only. AI Demo = synthetic fills for decks.
+              Discover Dining runs on the server for many minutes (Places + Playwright + follow-up URLs). Keep this tab open
+              until it finishes; the UI polls so you won’t get a network timeout. Optional Maps text if ENABLE_GBP_MAPS_SCRAPE.
             </Typography>
 
             <Stack direction="row" spacing={2} flexWrap="wrap">
@@ -340,7 +340,7 @@ const IngestionReviewPage = () => {
                 size="large"
               >
                 {discoverDiningMutation.isPending
-                  ? 'Discovering & scraping…'
+                  ? 'Discover Dining… (server job, many min — keep tab open)'
                   : '📍 Discover Dining (Places → websites)'}
               </Button>
               <Button

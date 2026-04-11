@@ -94,8 +94,18 @@ export const fetchDeals = async (
   return transformDealsEnvelope(envelope);
 };
 
-export const fetchPersonalisedDeals = async (): Promise<DwigoEnvelope<Deal[]>> => {
-  const envelope = await dwigo.get<DealResponse[]>('/deals/personalized');
+export interface FetchPersonalisedDealsParams {
+  /** "lat,lng" — same as main feed; must match location picker for Recommended to align with All deals */
+  location?: string;
+  radius?: number;
+  /** Lowercase chip id e.g. restaurants → server maps to dining */
+  category?: string;
+}
+
+export const fetchPersonalisedDeals = async (
+  params?: FetchPersonalisedDealsParams
+): Promise<DwigoEnvelope<Deal[]>> => {
+  const envelope = await dwigo.get<DealResponse[]>('/deals/personalized', { params });
   return transformDealsEnvelope(envelope);
 };
 

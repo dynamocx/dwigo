@@ -133,24 +133,84 @@ export interface DiscoverDiningScrapePayload {
   maxDealsPerVenue?: number;
   maxFollowUpUrls?: number;
   delayBetweenVenuesMs?: number;
+  /** Server waits for full run in one HTTP request (curl only; browsers time out). */
+  wait?: boolean;
 }
 
-export const discoverDiningFromPlaces = (payload: DiscoverDiningScrapePayload = {}) =>
-  dwigo.post<
+export interface DiscoverDiningResult {
+  message: string;
+  success?: boolean;
+  venuesFound?: number;
+  venuesScraped?: number;
+  dealsExtracted?: number;
+  dealsIngested?: number;
+  jobId?: string | number;
+  stats?: unknown;
+  results?: Array<{ name: string; website: string; dealsFound: number; success?: boolean; error?: string | null }>;
+  error?: string;
+}
+
+export interface DiscoverDiningJobStatus {
+  jobId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  message?: string;
+  error?: string;
+  createdAt?: number;
+  startedAt?: number;
+  finishedAt?: number;
+  result?: DiscoverDiningResult;
+}
+
+export const getDiscoverDiningJobStatus = (jobId: string) =>
+  dwigo.get<DiscoverDiningJobStatus>(`/admin/ai/discover-dining-scrape/job/${jobId}`, buildConfig());
+
+const DISCOVER_POLL_MS = 4000;
+const DISCOVER_MAX_POLLS = 900; // ~60 min at 4s
+
+/**
+ * Starts async discovery on the server (202), then polls until completed/failed.
+ * Avoids axios "Network Error" from long single HTTP requests.
+ */
+export async function discoverDiningFromPlaces(
+  payload: DiscoverDiningScrapePayload = {}
+): Promise<DwigoEnvelope<DiscoverDiningResult>> {
+  const env = await dwigo.post<
     DiscoverDiningScrapePayload,
-    {
-      message: string;
-      success?: boolean;
-      venuesFound?: number;
-      venuesScraped?: number;
-      dealsExtracted?: number;
-      dealsIngested?: number;
-      jobId?: string | number;
-      stats?: unknown;
-      results?: Array<{ name: string; website: string; dealsFound: number; success?: boolean; error?: string | null }>;
-      error?: string;
-    }
+    { jobId?: string; message?: string; status?: string } & Partial<DiscoverDiningResult>
   >('/admin/ai/discover-dining-scrape', payload, buildConfig());
+
+  const d = env.data;
+  if (d && typeof d === 'object' && typeof d.jobId === 'string' && d.jobId.length > 0) {
+    const jobId = d.jobId;
+    for (let i = 0; i < DISCOVER_MAX_POLLS; i += 1) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, DISCOVER_POLL_MS));
+      }
+      const st = await getDiscoverDiningJobStatus(jobId);
+      const row = st.data;
+      if (!row) continue;
+      if (row.status === 'completed' && row.result) {
+        const r = row.result;
+        return {
+          data: {
+            message: row.message ?? r.error ?? 'Discovery finished',
+            ...r,
+          },
+          error: null,
+          meta: {},
+        };
+      }
+      if (row.status === 'failed') {
+        throw new Error(row.error || row.message || 'Discovery job failed');
+      }
+    }
+    throw new Error(
+      'Stopped polling after ~60m (job may still be running). Refresh pending deals and check server logs.'
+    );
+  }
+
+  return env as DwigoEnvelope<DiscoverDiningResult>;
+}
 
 export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; dealCount: number; jobId: string; stats: unknown }>> => {
   const formData = new FormData();

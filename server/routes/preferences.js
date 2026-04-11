@@ -7,7 +7,7 @@ const router = express.Router();
 const buildEnvelope = ({ data, error = null, meta = {} }) => ({
   data,
   error,
-  meta: { recommended_by: 'preferences-service', ...meta },
+  meta: { recommended_by: 'DealStream', ...meta },
 });
 
 const optionalCoord = (v) => {

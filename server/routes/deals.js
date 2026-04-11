@@ -4,10 +4,14 @@ const pool = require('../config/database');
 const { authMiddleware } = require('../middleware/auth');
 const { canPerformAction } = require('../utils/abuseGuard');
 const { haversineWithinKmSql } = require('../utils/nearbyDeals');
+const {
+  expandPreferenceCategoriesToDealCategories,
+  resolveFeedCategoryParam,
+} = require('../utils/dealCategoryAliases');
 
 const router = express.Router();
 
-const DEFAULT_RECOMMENDER = 'deal-service';
+const DEFAULT_RECOMMENDER = 'DealStream';
 
 const buildEnvelope = ({ data, error = null, meta = {} }) => ({
   data,
@@ -67,6 +71,7 @@ const dealsPersonalizedQuerySchema = Joi.object({
   location: locationQueryValidator,
   radius: Joi.number().min(0.5).max(500).default(15),
   limit: Joi.number().integer().min(1).max(100).default(20),
+  category: Joi.string().trim().max(100).allow(''),
 }).unknown(true);
 
 const dealIdParamSchema = Joi.number().integer().positive().required();
@@ -109,9 +114,12 @@ router.get('/', async (req, res) => {
     let paramCount = 0;
 
     if (category) {
-      paramCount++;
-      query += ` AND d.category = $${paramCount}`;
-      params.push(category);
+      const resolved = resolveFeedCategoryParam(category);
+      if (resolved) {
+        paramCount++;
+        query += ` AND LOWER(TRIM(d.category)) = $${paramCount}`;
+        params.push(resolved);
+      }
     }
 
     if (location) {
@@ -184,7 +192,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     if (qErr) {
       return validationErrorResponse(res, qErr, { emptyList: true });
     }
-    const { limit } = pq;
+    const { limit, category: personalizedCategoryChip } = pq;
 
     // Get user preferences
     const preferencesResult = await pool.query(
@@ -199,7 +207,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
           data: [],
           meta: {
             total: 0,
-            recommended_by: 'dwigo-agent',
+            recommended_by: 'DealStream',
             reason: 'no-preferences',
           },
         })
@@ -218,22 +226,35 @@ router.get('/personalized', authMiddleware, async (req, res) => {
       WHERE d.status = 'active' AND (d.end_date IS NULL OR d.end_date > NOW())
     `;
 
+    const expandedDealCategories = expandPreferenceCategoriesToDealCategories(
+      preferences.preferred_categories
+    );
+
     const meta = {
       total: 0,
-      recommended_by: 'dwigo-agent',
+      recommended_by: 'DealStream',
       filters: {
-        categories: preferences.preferred_categories ?? [],
+        preferredLabels: preferences.preferred_categories ?? [],
+        expandedDealCategories: expandedDealCategories ?? null,
+        feedCategoryChip: personalizedCategoryChip || null,
       },
     };
 
     const params = [userId];
     let paramCount = 1;
 
-    // Filter by preferred categories
-    if (preferences.preferred_categories && preferences.preferred_categories.length > 0) {
+    // Filter by preferred categories (UI labels → lowercase deal.category values)
+    if (expandedDealCategories && expandedDealCategories.length > 0) {
       paramCount++;
-      query += ` AND d.category = ANY($${paramCount})`;
-      params.push(preferences.preferred_categories);
+      query += ` AND LOWER(TRIM(d.category)) = ANY($${paramCount})`;
+      params.push(expandedDealCategories);
+    }
+
+    const chipDealCat = resolveFeedCategoryParam(personalizedCategoryChip);
+    if (chipDealCat) {
+      paramCount++;
+      query += ` AND LOWER(TRIM(d.category)) = $${paramCount}`;
+      params.push(chipDealCat);
     }
     
     // Filter by preferred locations (if user has location enabled)
@@ -318,7 +339,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
         
         // Sort by match score (highest first)
         deals = scoredDeals.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
-        meta.recommended_by = 'ai:deal-matching-agent';
+        meta.recommended_by = 'DealStream + AI match';
         meta.matchingEnabled = true;
       } catch (error) {
         console.error('[deals] LLM matching error:', error);
@@ -341,7 +362,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
         buildEnvelope({
           data: [],
           error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
-          meta: { recommended_by: 'dwigo-agent' },
+          meta: { recommended_by: 'DealStream' },
         })
       );
   }
