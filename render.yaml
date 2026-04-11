@@ -34,6 +34,9 @@ services:
         value: 3
       - key: CORS_ORIGIN
         value: "https://dwigo.vercel.app,https://dwigo-git-main-dynamocx.vercel.app,http://localhost:5173"
+      # Discover Dining: extra Playwright load per venue on Maps (slower; best-effort; review Google Maps ToS)
+      - key: ENABLE_GBP_MAPS_SCRAPE
+        value: "true"
 
   # Note: Background Worker not available on free plan
   # Create manually: "New +" → "Background Worker" after deployment

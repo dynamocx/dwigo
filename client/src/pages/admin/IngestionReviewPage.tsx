@@ -401,7 +401,9 @@ const IngestionReviewPage = () => {
             <Typography variant="body2" color="text.secondary">
               Pick a <strong>2–3 city</strong> batch per run (faster and more reliable than one giant area). Rotate presets
               every few days or after deploys. Wide (slow) hits many metros in one job. Keep this tab open until the job
-              finishes; the UI polls the server. Optional Maps text if ENABLE_GBP_MAPS_SCRAPE.
+              finishes; the UI polls the server. When <code>ENABLE_GBP_MAPS_SCRAPE=true</code>, each venue also loads
+              its public Google Maps page (Playwright) to capture visible listing text for the extractor — slower but
+              can surface GBP-style blurbs. Respect Maps ToS.
             </Typography>
 
             <FormControl size="small" sx={{ maxWidth: 420 }}>
