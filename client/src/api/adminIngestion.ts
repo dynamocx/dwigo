@@ -100,17 +100,27 @@ export const submitManualDeal = (deal: ManualDealEntry) =>
     buildConfig()
   );
 
-/** Places-verified merchants → website HTML → strict LLM extraction (real offers only). Static HTML only (no Playwright). */
-export const fetchDealsWithAI = (options?: {
-  categories?: string[];
-  maxDealsPerLocation?: number;
-  /** When set, only these cities (match admin Discover Dining presets). Omit = Lansing/Flint/Grand Blanc/Fenton only. */
-  cities?: string[];
-}) =>
-  dwigo.post<
-    { categories?: string[]; maxDealsPerLocation?: number; cities?: string[] },
-    { message: string; dealCount: number; jobId: string; stats: unknown }
-  >('/admin/ai/fetch-deals', options || {}, buildConfig());
+/** Result shape for completed Real AI fetch (ingestion jobId is the pending-review batch). */
+export interface RealAiFetchResult {
+  message: string;
+  dealCount: number;
+  jobId?: string;
+  stats?: unknown;
+}
+
+export interface RealAiFetchJobStatus {
+  jobId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  message?: string;
+  error?: string;
+  createdAt?: number;
+  startedAt?: number;
+  finishedAt?: number;
+  result?: RealAiFetchResult;
+}
+
+export const getRealAiFetchJobStatus = (jobId: string) =>
+  dwigo.get<RealAiFetchJobStatus>(`/admin/ai/fetch-deals/job/${jobId}`, buildConfig());
 
 /** Demo / investor deck: LLM-invented offers for real merchant names (synthetic — verify before promote). */
 export const fetchDealsWithAIDemo = (options?: { categories?: string[]; maxDealsPerLocation?: number }) =>
@@ -219,6 +229,53 @@ export async function discoverDiningFromPlaces(
   }
 
   return env as DwigoEnvelope<DiscoverDiningResult>;
+}
+
+export interface FetchDealsWithAIOptions {
+  categories?: string[];
+  maxDealsPerLocation?: number;
+  /** When set, only these cities (match admin Discover Dining presets). Omit = Lansing/Flint/Grand Blanc/Fenton only. */
+  cities?: string[];
+}
+
+/**
+ * Real AI fetch: POST returns 202 + jobId; polls until completed/failed (same timeout window as Discover Dining).
+ */
+export async function fetchDealsWithAI(
+  options: FetchDealsWithAIOptions = {}
+): Promise<DwigoEnvelope<RealAiFetchResult>> {
+  const env = await dwigo.post<
+    FetchDealsWithAIOptions,
+    { jobId?: string; message?: string; status?: string } & Partial<RealAiFetchResult>
+  >('/admin/ai/fetch-deals', options, buildConfig());
+
+  const d = env.data;
+  if (d && typeof d === 'object' && typeof d.jobId === 'string' && d.jobId.length > 0) {
+    const jobId = d.jobId;
+    for (let i = 0; i < DISCOVER_MAX_POLLS; i += 1) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, DISCOVER_POLL_MS));
+      }
+      const st = await getRealAiFetchJobStatus(jobId);
+      const row = st.data;
+      if (!row) continue;
+      if (row.status === 'completed' && row.result) {
+        return {
+          data: row.result,
+          error: null,
+          meta: {},
+        };
+      }
+      if (row.status === 'failed') {
+        throw new Error(row.error || row.message || 'Real AI fetch job failed');
+      }
+    }
+    throw new Error(
+      'Stopped polling after ~60m (job may still be running). Refresh pending deals and check server logs.'
+    );
+  }
+
+  return env as DwigoEnvelope<RealAiFetchResult>;
 }
 
 export const uploadCSV = (file: File): Promise<DwigoEnvelope<{ message: string; dealCount: number; jobId: string; stats: unknown }>> => {

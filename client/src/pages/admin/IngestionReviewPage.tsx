@@ -305,7 +305,10 @@ const IngestionReviewPage = () => {
       ) : null}
 
       {aiFetchMutation.isSuccess && aiFetchMutation.data?.data ? (
-        <Alert severity="success" onClose={() => aiFetchMutation.reset()}>
+        <Alert
+          severity={aiFetchMutation.data.data.dealCount === 0 ? 'warning' : 'success'}
+          onClose={() => aiFetchMutation.reset()}
+        >
           {aiFetchMutation.data.data.message}
         </Alert>
       ) : null}
@@ -475,7 +478,9 @@ const IngestionReviewPage = () => {
                 }
                 size="large"
               >
-                {aiFetchMutation.isPending ? 'Extracting…' : '🤖 AI: Real (Places + website)'}
+                {aiFetchMutation.isPending
+                  ? 'AI Real… (server job — keep tab open, polling)'
+                  : '🤖 AI: Real (Places + website)'}
               </Button>
               <Button
                 variant="outlined"
@@ -521,12 +526,12 @@ const IngestionReviewPage = () => {
               <strong>Discover Dining</strong>.
             </Typography>
             <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
-              <strong>AI: Real (Places + website)</strong> uses Google Places Text Search per city (same city list as the
-              dropdown when the preset has <code>cities[]</code>; <strong>Wide</strong> falls back to Lansing · Flint ·
-              Grand Blanc · Fenton only). For each place it fetches the merchant <strong>homepage with static HTTP only</strong>{' '}
-              (no Playwright), then runs strict LLM extraction for at most one offer-like deal per place. Many sites need
-              JS rendering — use <strong>Discover Dining</strong> for Playwright + follow-up paths + optional Maps text.
-              Tuning: POST body <code>categories</code>, <code>maxDealsPerLocation</code> (default 8), <code>cities</code>.
+              <strong>AI: Real (Places + website)</strong> runs as an <strong>async server job</strong> (202 + poll — same
+              idea as Discover Dining) so the browser does not hit a network timeout. It uses Google Places Text Search per
+              city (same city list as the dropdown when the preset has <code>cities[]</code>; <strong>Wide</strong> falls
+              back to Lansing · Flint · Grand Blanc · Fenton only). Each place: <strong>homepage via static HTTP only</strong>{' '}
+              (no Playwright), then strict LLM extraction. Scripts can use POST <code>{'{ "wait": true }'}</code> for one
+              long response. Tuning: <code>categories</code>, <code>maxDealsPerLocation</code>, <code>cities</code>.
             </Typography>
           </Stack>
 

@@ -2,7 +2,7 @@
  * Admin API for AI Deal Fetching Agent
  *
  * Endpoints:
- * - POST /admin/ai/fetch-deals — Real: Places + merchant website → strict LLM extraction (optional body.cities[])
+ * - POST /admin/ai/fetch-deals — Real: Places + merchant website → strict LLM extraction (async 202 + poll by default)
  * - POST /admin/ai/fetch-deals-demo — Demo: synthetic offers for verified merchant names (presentations)
  * - POST /admin/ai/discover-dining-scrape — Async job (202) by default; GET .../job/:id to poll
  * - POST /admin/ai/match-deals — Match existing deals to users with LLM
@@ -25,19 +25,113 @@ const router = express.Router();
 const ADMIN_HEADER = 'x-admin-token';
 const adminToken = process.env.ADMIN_API_TOKEN;
 
-/** In-memory jobs for long-running discover-dining (avoids browser/proxy timeouts). Single-instance only. */
+/** In-memory jobs for long-running admin tasks (avoids browser/proxy timeouts). Single-instance only. */
 const discoverDiningJobs = new Map();
+const realAiFetchJobs = new Map();
 const DISCOVER_JOB_TTL_MS = 2 * 60 * 60 * 1000;
 
-function pruneDiscoverDiningJobs() {
+function pruneAdminLongJobs() {
   const cutoff = Date.now() - DISCOVER_JOB_TTL_MS;
   for (const [id, job] of discoverDiningJobs) {
     if ((job.createdAt || 0) < cutoff) discoverDiningJobs.delete(id);
+  }
+  for (const [id, job] of realAiFetchJobs) {
+    if ((job.createdAt || 0) < cutoff) realAiFetchJobs.delete(id);
   }
 }
 
 function newDiscoverJobId() {
   return `dd_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function newRealAiJobId() {
+  return `ai_real_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function mapRealAiDealsToIngestion(deals) {
+  return deals.map((deal) => ({
+    merchantAlias: deal.merchantName || 'Unknown Merchant',
+    rawPayload: {
+      title: deal.title,
+      description: deal.description,
+      category: deal.category,
+      address: deal.address,
+      city: deal.city || deal.location?.split(',')[0],
+      state: deal.state || 'MI',
+      postalCode: deal.postalCode,
+      latitude: deal.latitude,
+      longitude: deal.longitude,
+      startDate: deal.startDate,
+      endDate: deal.endDate,
+      price: deal.price,
+      discountPercentage: deal.discountPercentage,
+      sourceUrl: deal.sourceUrl,
+      syntheticDeal: false,
+      dataSource: deal.dataSource || 'verified_merchant_website',
+      googlePlaceId: deal.googlePlacesId || null,
+      extractionMethod: deal.extractionMethod,
+    },
+    normalizedPayload: {
+      title: deal.title,
+      category: deal.category,
+      syntheticDeal: false,
+      dealVerified: false,
+      merchantVerified: true,
+      location: {
+        city: deal.city || deal.location?.split(',')[0],
+        state: deal.state || 'MI',
+        latitude: deal.latitude,
+        longitude: deal.longitude,
+      },
+      ...(deal.discountPercentage
+        ? {
+            discount: {
+              type: 'percentage',
+              value: deal.discountPercentage,
+            },
+          }
+        : {}),
+      ...(deal.price
+        ? {
+            price: {
+              currency: 'USD',
+              amount: parseFloat(String(deal.price).replace('$', '')) || null,
+            },
+          }
+        : {}),
+    },
+    confidence: deal.confidence || 0.78,
+  }));
+}
+
+async function runRealAiFetchPipeline({ categories, maxDealsPerLocation, citiesFilter }) {
+  const deals = await discoverRealDealsFromVerifiedWebsites({
+    categories: categories || ['Dining', 'Entertainment', 'Shopping'],
+    maxDealsPerLocation: maxDealsPerLocation || 8,
+    ...(citiesFilter?.length ? { cities: citiesFilter } : {}),
+  });
+
+  if (deals.length === 0) {
+    return {
+      message:
+        'No deals extracted. Businesses may lack websites, pages may be JS-only (use Discover Dining for Playwright), or sites may have no explicit offer text.',
+      dealCount: 0,
+    };
+  }
+
+  const ingestionDeals = mapRealAiDealsToIngestion(deals);
+  const payload = {
+    source: 'ai:verified-website',
+    scope: 'mid-michigan-real',
+    deals: ingestionDeals,
+  };
+  const result = await processIngestionJob(payload);
+  return {
+    message: `Real AI fetch: extracted ${ingestionDeals.length} deal(s) from merchant websites (strict extraction).`,
+    dealCount: ingestionDeals.length,
+    jobId: result.jobId,
+    stats: result.stats,
+  };
 }
 
 function buildDiscoverDiningOptions(body) {
@@ -92,12 +186,15 @@ router.use((req, res, next) => {
 
 router.use(requireAdminToken);
 
-// Real AI: Places-verified merchants → static fetch of their website → strict LLM extraction only (no invented offers)
+// Real AI: Places-verified merchants → static fetch of their website → strict LLM extraction only (no invented offers).
+// Default: async job (202 + jobId) — many Places + LLM calls time out browsers/proxies on a single POST.
+// Sync: POST body `{ "wait": true }` or query `?wait=1` (scripts/curl only).
 router.post('/fetch-deals', async (req, res) => {
   console.log('[admin/ai] /fetch-deals (real website extraction) hit');
 
   try {
-    const { categories, maxDealsPerLocation, cities } = req.body;
+    const body = req.body || {};
+    const { categories, maxDealsPerLocation, cities } = body;
     const citiesFilter = Array.isArray(cities)
       ? cities.map((c) => String(c).trim()).filter(Boolean)
       : undefined;
@@ -124,12 +221,69 @@ router.post('/fetch-deals', async (req, res) => {
       });
     }
 
-    let deals;
+    const waitSync = body.wait === true || req.query.wait === '1' || req.query.sync === '1';
+    const pipelineOpts = {
+      categories: categories || ['Dining', 'Entertainment', 'Shopping'],
+      maxDealsPerLocation: maxDealsPerLocation || 8,
+      citiesFilter,
+    };
+
+    if (!waitSync) {
+      pruneAdminLongJobs();
+      const jobId = newRealAiJobId();
+      realAiFetchJobs.set(jobId, {
+        status: 'queued',
+        createdAt: Date.now(),
+      });
+
+      setImmediate(() => {
+        const entry = realAiFetchJobs.get(jobId);
+        realAiFetchJobs.set(jobId, {
+          ...entry,
+          status: 'running',
+          startedAt: Date.now(),
+        });
+        runRealAiFetchPipeline(pipelineOpts)
+          .then((data) => {
+            realAiFetchJobs.set(jobId, {
+              createdAt: entry.createdAt,
+              status: 'completed',
+              result: data,
+              finishedAt: Date.now(),
+            });
+            console.log(`[admin/ai] real-ai-fetch job ${jobId} completed`, {
+              dealCount: data.dealCount,
+            });
+          })
+          .catch((err) => {
+            console.error(`[admin/ai] real-ai-fetch job ${jobId} failed`, err);
+            realAiFetchJobs.set(jobId, {
+              createdAt: entry.createdAt,
+              status: 'failed',
+              error: err.message || String(err),
+              finishedAt: Date.now(),
+            });
+          });
+      });
+
+      return res.status(202).json({
+        data: {
+          jobId,
+          status: 'queued',
+          message:
+            'Real AI fetch job started. Poll GET /admin/ai/fetch-deals/job/:jobId until completed or failed (can take many minutes).',
+        },
+        error: null,
+        meta: {},
+      });
+    }
+
     try {
-      deals = await discoverRealDealsFromVerifiedWebsites({
-        categories: categories || ['Dining', 'Entertainment', 'Shopping'],
-        maxDealsPerLocation: maxDealsPerLocation || 8,
-        ...(citiesFilter?.length ? { cities: citiesFilter } : {}),
+      const data = await runRealAiFetchPipeline(pipelineOpts);
+      return res.json({
+        data,
+        error: null,
+        meta: {},
       });
     } catch (error) {
       console.error('[admin/ai] Real AI fetch error:', error);
@@ -139,91 +293,6 @@ router.post('/fetch-deals', async (req, res) => {
         meta: {},
       });
     }
-
-    if (deals.length === 0) {
-      return res.json({
-        data: {
-          message:
-            'No deals extracted. Businesses may lack websites, pages may be JS-only (use Discover Dining for Playwright), or sites may have no explicit offer text.',
-          dealCount: 0,
-        },
-        error: null,
-        meta: {},
-      });
-    }
-
-    const ingestionDeals = deals.map((deal) => ({
-      merchantAlias: deal.merchantName || 'Unknown Merchant',
-      rawPayload: {
-        title: deal.title,
-        description: deal.description,
-        category: deal.category,
-        address: deal.address,
-        city: deal.city || deal.location?.split(',')[0],
-        state: deal.state || 'MI',
-        postalCode: deal.postalCode,
-        latitude: deal.latitude,
-        longitude: deal.longitude,
-        startDate: deal.startDate,
-        endDate: deal.endDate,
-        price: deal.price,
-        discountPercentage: deal.discountPercentage,
-        sourceUrl: deal.sourceUrl,
-        syntheticDeal: false,
-        dataSource: deal.dataSource || 'verified_merchant_website',
-        googlePlaceId: deal.googlePlacesId || null,
-        extractionMethod: deal.extractionMethod,
-      },
-      normalizedPayload: {
-        title: deal.title,
-        category: deal.category,
-        syntheticDeal: false,
-        dealVerified: false,
-        merchantVerified: true,
-        location: {
-          city: deal.city || deal.location?.split(',')[0],
-          state: deal.state || 'MI',
-          latitude: deal.latitude,
-          longitude: deal.longitude,
-        },
-        ...(deal.discountPercentage
-          ? {
-              discount: {
-                type: 'percentage',
-                value: deal.discountPercentage,
-              },
-            }
-          : {}),
-        ...(deal.price
-          ? {
-              price: {
-                currency: 'USD',
-                amount: parseFloat(String(deal.price).replace('$', '')) || null,
-              },
-            }
-          : {}),
-      },
-      confidence: deal.confidence || 0.78,
-    }));
-
-    const payload = {
-      source: 'ai:verified-website',
-      scope: 'mid-michigan-real',
-      deals: ingestionDeals,
-    };
-
-    const result = await processIngestionJob(payload);
-
-    res.json({
-      data: {
-        message: `Real AI fetch: extracted ${ingestionDeals.length} deal(s) from merchant websites (strict extraction).`,
-        dealCount: ingestionDeals.length,
-        jobId: result.jobId,
-        stats: result.stats,
-      },
-      error: null,
-      meta: {},
-    });
   } catch (error) {
     console.error('[admin/ai] fetch-deals error', error);
     res.status(500).json({
@@ -232,6 +301,37 @@ router.post('/fetch-deals', async (req, res) => {
       meta: {},
     });
   }
+});
+
+router.get('/fetch-deals/job/:jobId', (req, res) => {
+  const job = realAiFetchJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({
+      data: null,
+      error: { message: 'Job not found or expired' },
+      meta: {},
+    });
+  }
+  const payload = {
+    jobId: req.params.jobId,
+    status: job.status,
+    createdAt: job.createdAt,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt,
+  };
+  if (job.status === 'completed' && job.result) {
+    payload.result = job.result;
+    payload.message = job.result.message;
+  }
+  if (job.status === 'failed') {
+    payload.error = job.error;
+    payload.message = job.error || 'Real AI fetch job failed';
+  }
+  res.json({
+    data: payload,
+    error: null,
+    meta: {},
+  });
 });
 
 // Demo / investor deck: LLM-generated plausible offers for Places-verified merchants (not scraped — synthetic)
@@ -513,7 +613,7 @@ router.post('/discover-dining-scrape', async (req, res) => {
     const waitSync = body.wait === true || req.query.wait === '1' || req.query.sync === '1';
 
     if (!waitSync) {
-      pruneDiscoverDiningJobs();
+      pruneAdminLongJobs();
       const jobId = newDiscoverJobId();
       discoverDiningJobs.set(jobId, {
         status: 'queued',
