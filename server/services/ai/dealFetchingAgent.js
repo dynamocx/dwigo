@@ -77,6 +77,18 @@ function resolveLocationsForRealFetch(options = {}) {
   return matched;
 }
 
+/** Text Search queries for Dining (bars, breweries, happy hour — not just "restaurants"). */
+function realAiDiningSearchQueries(cityName) {
+  return [
+    `restaurants in ${cityName}`,
+    `bars and pubs in ${cityName}`,
+    `brewery taproom in ${cityName}`,
+    `wine bar in ${cityName}`,
+    `night club in ${cityName}`,
+    `happy hour in ${cityName}`,
+  ];
+}
+
 /**
  * Tool definitions for LLM function calling
  */
@@ -777,88 +789,99 @@ async function discoverRealDealsFromVerifiedWebsites(options = {}) {
   for (const location of locations) {
     const cityName = location.name.split(',')[0].trim();
     const stateAbbr = location.name.split(',')[1]?.trim() || 'MI';
+    const seenPlaceIds = new Set();
 
     for (const category of categories) {
-      let searchQuery = `${category} in ${cityName}`;
-      if (category === 'Dining') {
-        searchQuery = `restaurants in ${cityName}`;
-      } else if (category === 'Shopping') {
-        searchQuery = `shopping stores in ${cityName}`;
-      } else if (category === 'Entertainment') {
-        searchQuery = `entertainment venues in ${cityName}`;
-      }
+      const diningQueries =
+        category === 'Dining' ? realAiDiningSearchQueries(cityName) : null;
+      const searchQueries = diningQueries || [
+        category === 'Shopping'
+          ? `shopping stores in ${cityName}`
+          : category === 'Entertainment'
+            ? `entertainment venues in ${cityName}`
+            : `${category} in ${cityName}`,
+      ];
 
-      let placesResult;
-      try {
-        placesResult = await searchGooglePlaces(searchQuery, cityName, stateAbbr, { returnAll: true });
-      } catch (e) {
-        console.warn(`[RealDealFetch] Places search failed ${searchQuery}:`, e.message);
-        continue;
-      }
+      const perQueryCap = diningQueries
+        ? Math.max(2, Math.ceil(maxDealsPerLocation / Math.max(1, diningQueries.length)))
+        : maxDealsPerLocation;
 
-      if (!placesResult?.results?.length) {
-        continue;
-      }
-
-      const slice = placesResult.results.slice(0, maxDealsPerLocation);
-
-      for (const place of slice) {
-        const placeId = place.placeId || place.place_id;
-        if (!placeId) continue;
-
-        let details;
+      for (const searchQuery of searchQueries) {
+        let placesResult;
         try {
-          details = await getGooglePlaceDetails(placeId);
+          placesResult = await searchGooglePlaces(searchQuery, cityName, stateAbbr, { returnAll: true });
         } catch (e) {
+          console.warn(`[RealDealFetch] Places search failed ${searchQuery}:`, e.message);
           continue;
         }
 
-        if (!details?.website) {
-          console.log(`[RealDealFetch] skip (no website): ${place.name}`);
-          await new Promise((r) => setTimeout(r, 200));
+        if (!placesResult?.results?.length) {
           continue;
         }
 
-        let fetchRes;
-        try {
-          fetchRes = await fetchStaticHtml(details.website, 15000);
-        } catch (e) {
-          fetchRes = { success: false };
-        }
+        const slice = placesResult.results.slice(0, perQueryCap);
 
-        if (!fetchRes.success || !fetchRes.html) {
-          await new Promise((r) => setTimeout(r, 400));
-          continue;
-        }
+        for (const place of slice) {
+          const placeId = place.placeId || place.place_id;
+          if (!placeId || seenPlaceIds.has(placeId)) continue;
+          seenPlaceIds.add(placeId);
 
-        const deal = await tryExtractSingleDealFromPage(
-          place.name,
-          details.city || cityName,
-          details.state || stateAbbr,
-          fetchRes.html,
-          fetchRes.url || details.website,
-          {
-            category,
-            extractionMethod: 'ai-real+verified-website-llm',
-            confidence: 0.78,
+          let details;
+          try {
+            details = await getGooglePlaceDetails(placeId);
+          } catch (e) {
+            continue;
           }
-        );
 
-        if (deal) {
-          allDeals.push({
-            ...deal,
-            address: details.formatted_address || place.address,
-            latitude: details.lat ?? place.latitude ?? place.location?.lat,
-            longitude: details.lng ?? place.longitude ?? place.location?.lng,
-            syntheticDeal: false,
-            dealVerified: false,
-            merchantVerified: true,
-            googlePlacesId: placeId,
-            dataSource: 'verified_merchant_website',
-          });
+          if (!details?.website) {
+            console.log(`[RealDealFetch] skip (no website): ${place.name}`);
+            await new Promise((r) => setTimeout(r, 200));
+            continue;
+          }
+
+          let fetchRes;
+          try {
+            fetchRes = await fetchStaticHtml(details.website, 15000);
+          } catch (e) {
+            fetchRes = { success: false };
+          }
+
+          if (!fetchRes.success || !fetchRes.html) {
+            await new Promise((r) => setTimeout(r, 400));
+            continue;
+          }
+
+          const deal = await tryExtractSingleDealFromPage(
+            place.name,
+            details.city || cityName,
+            details.state || stateAbbr,
+            fetchRes.html,
+            fetchRes.url || details.website,
+            {
+              category,
+              extractionMethod: 'ai-real+verified-website-llm',
+              confidence: 0.78,
+            }
+          );
+
+          if (deal) {
+            allDeals.push({
+              ...deal,
+              address: details.formatted_address || place.address,
+              latitude: details.lat ?? place.latitude ?? place.location?.lat,
+              longitude: details.lng ?? place.longitude ?? place.location?.lng,
+              syntheticDeal: false,
+              dealVerified: false,
+              merchantVerified: true,
+              googlePlacesId: placeId,
+              dataSource: 'verified_merchant_website',
+            });
+          }
+
+          await new Promise((r) => setTimeout(r, 1500));
         }
 
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 800));
       }
 
       await new Promise((r) => setTimeout(r, 1500));

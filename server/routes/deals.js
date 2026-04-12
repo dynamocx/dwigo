@@ -6,7 +6,11 @@ const { canPerformAction } = require('../utils/abuseGuard');
 const { haversineWithinKmSql } = require('../utils/nearbyDeals');
 const {
   expandPreferenceCategoriesToDealCategories,
+  preferenceSubcategorySlugs,
+  preferenceHasBroadDiningOrSpirits,
   resolveFeedCategoryParam,
+  resolveFeedSubcategorySlugs,
+  parseSubcategoryQueryParam,
 } = require('../utils/dealCategoryAliases');
 
 const router = express.Router();
@@ -62,6 +66,8 @@ const locationQueryValidator = Joi.string()
 
 const dealsListQuerySchema = Joi.object({
   category: Joi.string().trim().max(100).allow(''),
+  /** Comma-separated slugs (happy_hour,bar_pub) or a feed chip label (happy hour) */
+  subcategory: Joi.string().trim().max(200).allow(''),
   location: locationQueryValidator,
   radius: Joi.number().min(0.5).max(500).default(15),
   limit: Joi.number().integer().min(1).max(200).default(50),
@@ -72,6 +78,7 @@ const dealsPersonalizedQuerySchema = Joi.object({
   radius: Joi.number().min(0.5).max(500).default(15),
   limit: Joi.number().integer().min(1).max(100).default(20),
   category: Joi.string().trim().max(100).allow(''),
+  subcategory: Joi.string().trim().max(200).allow(''),
 }).unknown(true);
 
 const dealIdParamSchema = Joi.number().integer().positive().required();
@@ -100,7 +107,7 @@ router.get('/', async (req, res) => {
     if (error) {
       return validationErrorResponse(res, error, { emptyList: true });
     }
-    const { category, location, radius, limit } = q;
+    const { category, subcategory: subcategoryRaw, location, radius, limit } = q;
 
     let query = `
       SELECT d.*, m.business_name, m.address, m.city, m.state, 
@@ -120,6 +127,16 @@ router.get('/', async (req, res) => {
         query += ` AND LOWER(TRIM(d.category)) = $${paramCount}`;
         params.push(resolved);
       }
+    }
+
+    const subSlugList =
+      parseSubcategoryQueryParam(subcategoryRaw) ||
+      (subcategoryRaw ? resolveFeedSubcategorySlugs(subcategoryRaw) : null) ||
+      (category ? resolveFeedSubcategorySlugs(category) : null);
+    if (subSlugList?.length) {
+      paramCount++;
+      query += ` AND LOWER(TRIM(d.subcategory)) = ANY($${paramCount}::text[])`;
+      params.push(subSlugList);
     }
 
     if (location) {
@@ -160,6 +177,7 @@ router.get('/', async (req, res) => {
           cache_hit: false,
           filters: {
             category: category ?? null,
+            subcategory: subcategoryRaw ?? null,
             location: location ?? null,
             radius: Number(radius),
             limit: Number(limit),
@@ -192,7 +210,7 @@ router.get('/personalized', authMiddleware, async (req, res) => {
     if (qErr) {
       return validationErrorResponse(res, qErr, { emptyList: true });
     }
-    const { limit, category: personalizedCategoryChip } = pq;
+    const { limit, category: personalizedCategoryChip, subcategory: personalizedSubRaw } = pq;
 
     // Get user preferences
     const preferencesResult = await pool.query(
@@ -256,7 +274,24 @@ router.get('/personalized', authMiddleware, async (req, res) => {
       query += ` AND LOWER(TRIM(d.category)) = $${paramCount}`;
       params.push(chipDealCat);
     }
-    
+
+    const chipSubSlugs =
+      parseSubcategoryQueryParam(personalizedSubRaw) ||
+      (personalizedCategoryChip ? resolveFeedSubcategorySlugs(personalizedCategoryChip) : null);
+    if (chipSubSlugs?.length) {
+      paramCount++;
+      query += ` AND LOWER(TRIM(d.subcategory)) = ANY($${paramCount}::text[])`;
+      params.push(chipSubSlugs);
+    } else {
+      const drinkSlugs = preferenceSubcategorySlugs(preferences.preferred_categories);
+      const broadDrink = preferenceHasBroadDiningOrSpirits(preferences.preferred_categories);
+      if (drinkSlugs.length > 0 && !broadDrink) {
+        paramCount++;
+        query += ` AND LOWER(TRIM(d.subcategory)) = ANY($${paramCount}::text[])`;
+        params.push(drinkSlugs);
+      }
+    }
+
     // Filter by preferred locations (if user has location enabled)
     // Also check for location query param (from frontend location picker)
     const { location, radius } = pq;

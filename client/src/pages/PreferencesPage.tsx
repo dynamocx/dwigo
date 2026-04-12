@@ -37,7 +37,20 @@ import { useAuth } from '@/auth/AuthContext';
 import ErrorState from '@/components/common/ErrorState';
 import FullScreenLoader from '@/components/common/FullScreenLoader';
 
-const CATEGORY_OPTIONS = ['Groceries', 'Dining', 'Home Improvement', 'Family Activities', 'Wellness', 'Travel', 'Spirits, Beer & Wine', 'Entertainment', 'Shopping'];
+const CATEGORY_OPTIONS = [
+  'Groceries',
+  'Dining',
+  'Bars & Pubs',
+  'Wineries & Breweries',
+  'Night Clubs',
+  'Home Improvement',
+  'Family Activities',
+  'Wellness',
+  'Travel',
+  'Spirits, Beer & Wine',
+  'Entertainment',
+  'Shopping',
+];
 const BRAND_OPTIONS = ['Target', 'Costco', 'Starbucks', 'Home Depot', 'REI', 'Marriott'];
 const CITY_OPTIONS = ['San Francisco', 'Los Angeles', 'Seattle', 'Austin', 'Chicago', 'Orlando'];
 const CONSENT_VERSION = 'v2025-01';

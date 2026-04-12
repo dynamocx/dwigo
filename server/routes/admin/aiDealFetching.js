@@ -70,10 +70,12 @@ function mapRealAiDealsToIngestion(deals) {
       dataSource: deal.dataSource || 'verified_merchant_website',
       googlePlaceId: deal.googlePlacesId || null,
       extractionMethod: deal.extractionMethod,
+      subcategory: deal.subcategory ?? null,
     },
     normalizedPayload: {
       title: deal.title,
       category: deal.category,
+      ...(deal.subcategory ? { subcategory: deal.subcategory } : {}),
       syntheticDeal: false,
       dealVerified: false,
       merchantVerified: true,

@@ -129,6 +129,30 @@ async function callLLMForExtraction(messages, retryCount = 0) {
   }
 }
 
+/**
+ * Single subcategory slug for deals.subcategory (personalization / feed filters).
+ * @param {object} extracted - LLM output
+ * @returns {string|null}
+ */
+function inferSubcategoryFromExtraction(extracted) {
+  const tags = Array.isArray(extracted.tags)
+    ? extracted.tags.map((t) => String(t).toLowerCase().replace(/\s+/g, '_'))
+    : [];
+  const text = `${extracted.title || ''} ${extracted.description || ''}`.toLowerCase();
+
+  const has = (s) => tags.includes(s);
+  if (has('happy_hour') || /\bhappy\s*hour\b/.test(text)) return 'happy_hour';
+  if (has('nightclub') || has('night_club') || /\bnight\s*club\b/.test(text)) return 'nightclub';
+  if (has('nightlife') || /\bnightlife\b/.test(text)) return 'nightlife';
+  if (has('taproom') && !has('brewery') && !/\bbrewery\b/.test(text)) return 'taproom';
+  if (has('brewery') || /\bbrewery\b|\bmicrobrew\b/.test(text)) return 'brewery';
+  if (has('winery') || has('wine_tasting') || /\bwinery\b|\bwine\s*tasting\b/.test(text)) return 'winery';
+  if (has('pub') || /\bpub\b|\btavern\b/.test(text)) return 'pub';
+  if (has('bar_pub') || has('sports_bar') || /\bcocktail\b|\bbar\s+&\s+grill\b/.test(text)) return 'bar_pub';
+  if (has('drink_special') || /\bdrink\s*special\b|\b(?:pint|draft|wine)\s+\$?\d/.test(text)) return 'drink_special';
+  return null;
+}
+
 const EXTRACTION_SYSTEM_PROMPT = `You are a data extraction assistant. Your ONLY job is to extract deal information from the provided HTML.
 
 CRITICAL RULES:
@@ -148,7 +172,8 @@ Return ONLY valid JSON with this structure:
   "price": number | null,
   "startDate": ISO date string | null,
   "endDate": ISO date string | null,
-  "rejectionReason": string | null
+  "rejectionReason": string | null,
+  "tags": string[] | null
 }
 
 Extraction rules:
@@ -158,6 +183,7 @@ Extraction rules:
 - discountPercentage: number (e.g., 20 for "20% off")
 - discountValue: string (e.g., "$5 off", "Buy one get one")
 - price: number (e.g., 15.99 for "$15.99")
+- tags: optional array of lowercase slugs when the offer is clearly drink/venue-scoped, e.g. "happy_hour", "brewery", "winery", "bar_pub", "nightclub", "drink_special", "pub"
 
 If no deal found in HTML, return: { "valid": false, "rejectionReason": "No deal found in provided HTML" }`;
 
@@ -234,6 +260,8 @@ Return JSON only.`,
           extracted.endDate = fixedEnd.toISOString();
         }
       }
+
+      extracted._inferredSubcategory = inferSubcategoryFromExtraction(extracted);
       
       return extracted;
     }
@@ -279,10 +307,16 @@ async function processScrapedContent(scrapeResult) {
         endDate = fixedEnd.toISOString();
       }
       
+      const subFromStruct = inferSubcategoryFromExtraction({
+        tags: [],
+        title: item.title,
+        description: item.description,
+      });
       deals.push({
         title: item.title,
         description: item.description || `${item.title} at ${scrapeResult.merchantName}`,
         category: scrapeResult.category || 'Shopping',
+        subcategory: subFromStruct,
         merchantName: scrapeResult.merchantName,
         city: scrapeResult.city,
         state: scrapeResult.state,
@@ -335,6 +369,7 @@ async function processScrapedContent(scrapeResult) {
         title: extracted.title,
         description: extracted.description || `${extracted.title} at ${scrapeResult.merchantName}`,
         category: scrapeResult.category || 'Shopping',
+        subcategory: extracted._inferredSubcategory || null,
         merchantName: scrapeResult.merchantName, // Always use source merchant name, never LLM's version
         city: scrapeResult.city,
         state: scrapeResult.state,
@@ -387,6 +422,7 @@ async function tryExtractSingleDealFromPage(merchantName, city, state, html, sou
     title: extracted.title,
     description: extracted.description || `${extracted.title} at ${merchantName}`,
     category,
+    subcategory: extracted._inferredSubcategory || null,
     merchantName,
     city,
     state,
@@ -406,5 +442,6 @@ module.exports = {
   extractDealFromHtml,
   processScrapedContent,
   tryExtractSingleDealFromPage,
+  inferSubcategoryFromExtraction,
 };
 

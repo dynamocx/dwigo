@@ -23,7 +23,19 @@ import DealCard from '@/features/deals/components/DealCard';
 import type { Deal } from '@/types/deal';
 import type { DwigoEnvelope } from '@/lib/dwigo';
 
-const CATEGORIES = ['Restaurants', 'Shopping', 'Entertainment', 'Travel', 'Home', 'Beauty', 'Sports'];
+const CATEGORIES = [
+  'Restaurants',
+  'Happy hour',
+  'Bars & pubs',
+  'Wineries & breweries',
+  'Nightlife',
+  'Shopping',
+  'Entertainment',
+  'Travel',
+  'Home',
+  'Beauty',
+  'Sports',
+];
 
 const DealsPage = () => {
   const theme = useTheme();

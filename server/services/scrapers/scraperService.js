@@ -125,6 +125,7 @@ function buildIngestionDealsFromScraped(allDeals) {
       title: deal.title,
       description: deal.description,
       category: deal.category,
+      subcategory: deal.subcategory ?? null,
       city: deal.city,
       state: deal.state,
       startDate: deal.startDate,
@@ -141,6 +142,7 @@ function buildIngestionDealsFromScraped(allDeals) {
     normalizedPayload: {
       title: deal.title,
       category: deal.category,
+      ...(deal.subcategory ? { subcategory: deal.subcategory } : {}),
       location: {
         city: deal.city,
         state: deal.state,
