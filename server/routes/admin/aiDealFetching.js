@@ -2,7 +2,7 @@
  * Admin API for AI Deal Fetching Agent
  *
  * Endpoints:
- * - POST /admin/ai/fetch-deals — Real: Places + merchant website → strict LLM extraction
+ * - POST /admin/ai/fetch-deals — Real: Places + merchant website → strict LLM extraction (optional body.cities[])
  * - POST /admin/ai/fetch-deals-demo — Demo: synthetic offers for verified merchant names (presentations)
  * - POST /admin/ai/discover-dining-scrape — Async job (202) by default; GET .../job/:id to poll
  * - POST /admin/ai/match-deals — Match existing deals to users with LLM
@@ -97,7 +97,10 @@ router.post('/fetch-deals', async (req, res) => {
   console.log('[admin/ai] /fetch-deals (real website extraction) hit');
 
   try {
-    const { categories, maxDealsPerLocation } = req.body;
+    const { categories, maxDealsPerLocation, cities } = req.body;
+    const citiesFilter = Array.isArray(cities)
+      ? cities.map((c) => String(c).trim()).filter(Boolean)
+      : undefined;
 
     const hasLlm =
       !!process.env.OPENAI_API_KEY?.trim() ||
@@ -126,6 +129,7 @@ router.post('/fetch-deals', async (req, res) => {
       deals = await discoverRealDealsFromVerifiedWebsites({
         categories: categories || ['Dining', 'Entertainment', 'Shopping'],
         maxDealsPerLocation: maxDealsPerLocation || 8,
+        ...(citiesFilter?.length ? { cities: citiesFilter } : {}),
       });
     } catch (error) {
       console.error('[admin/ai] Real AI fetch error:', error);

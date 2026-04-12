@@ -19,13 +19,63 @@ const cheerio = require('cheerio');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1';
 
-// Pilot locations for Mid-Michigan
+// Default pilot locations for Mid-Michigan (AI Real + demo when no `cities` filter)
 const PILOT_LOCATIONS = [
   { name: 'Lansing, MI', latitude: 42.7325, longitude: -84.5555, radius: 15 },
   { name: 'Flint, MI', latitude: 43.0125, longitude: -83.6875, radius: 15 },
   { name: 'Grand Blanc, MI', latitude: 42.9275, longitude: -83.6169, radius: 15 },
-  { name: 'Fenton, MI', latitude: 42.7978, longitude: -83.7050, radius: 15 },
+  { name: 'Fenton, MI', latitude: 42.7978, longitude: -83.705, radius: 15 },
 ];
+
+/** Coordinates for admin Discover Dining presets — optional `cities` on AI Real narrows to these. */
+const ALL_KNOWN_PILOT_LOCATIONS = [
+  ...PILOT_LOCATIONS,
+  { name: 'East Lansing, MI', latitude: 42.7364, longitude: -84.4839, radius: 15 },
+  { name: 'Okemos, MI', latitude: 42.7073, longitude: -84.4274, radius: 15 },
+  { name: 'Saginaw, MI', latitude: 43.4194, longitude: -83.9508, radius: 15 },
+  { name: 'Midland, MI', latitude: 43.6156, longitude: -84.2472, radius: 15 },
+  { name: 'Bay City, MI', latitude: 43.5945, longitude: -83.8889, radius: 15 },
+  { name: 'Frankenmuth, MI', latitude: 43.3317, longitude: -83.738, radius: 15 },
+  { name: 'Bridgeport, MI', latitude: 43.3592, longitude: -83.8816, radius: 15 },
+  { name: 'Birch Run, MI', latitude: 43.2509, longitude: -83.7441, radius: 15 },
+  { name: 'Owosso, MI', latitude: 42.9978, longitude: -84.1766, radius: 15 },
+  { name: 'Corunna, MI', latitude: 42.9828, longitude: -84.1177, radius: 15 },
+  { name: 'Durand, MI', latitude: 42.9114, longitude: -83.9847, radius: 15 },
+  { name: 'Kalamazoo, MI', latitude: 42.2917, longitude: -85.5872, radius: 15 },
+  { name: 'Portage, MI', latitude: 42.2009, longitude: -85.588, radius: 15 },
+  { name: 'Battle Creek, MI', latitude: 42.3212, longitude: -85.1797, radius: 15 },
+];
+
+function normalizeCityToken(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/,\s*mi$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * @param {{ cities?: string[] }} options
+ * @returns {typeof PILOT_LOCATIONS}
+ */
+function resolveLocationsForRealFetch(options = {}) {
+  const cities = options.cities;
+  if (!Array.isArray(cities) || cities.length === 0) {
+    return PILOT_LOCATIONS;
+  }
+  const wanted = cities.map(normalizeCityToken).filter(Boolean);
+  const matched = ALL_KNOWN_PILOT_LOCATIONS.filter((loc) => {
+    const cityPart = normalizeCityToken(loc.name.split(',')[0]);
+    return wanted.some(
+      (w) => cityPart === w || cityPart.replace(/\s/g, '') === w.replace(/\s/g, '')
+    );
+  });
+  if (matched.length === 0) {
+    console.warn('[RealDealFetch] No coords for cities:', cities, '— using core pilots');
+    return PILOT_LOCATIONS;
+  }
+  return matched;
+}
 
 /**
  * Tool definitions for LLM function calling
@@ -697,7 +747,16 @@ async function discoverRealDealsFromVerifiedWebsites(options = {}) {
     );
   }
 
-  const { categories = ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation = 8 } = options;
+  const {
+    categories = ['Dining', 'Entertainment', 'Shopping'],
+    maxDealsPerLocation = 8,
+    cities: citiesFilter,
+  } = options;
+
+  const locations = resolveLocationsForRealFetch({ cities: citiesFilter });
+  if (citiesFilter?.length) {
+    console.log(`[RealDealFetch] Using ${locations.length} location(s) from cities filter:`, citiesFilter);
+  }
 
   if (!extractionLlmConfigured()) {
     console.warn('[RealDealFetch] No extraction LLM (OPENAI_API_KEY or EXTRACTION_USE_CLAUDE + ANTHROPIC_API_KEY)');
@@ -715,7 +774,7 @@ async function discoverRealDealsFromVerifiedWebsites(options = {}) {
 
   const allDeals = [];
 
-  for (const location of PILOT_LOCATIONS) {
+  for (const location of locations) {
     const cityName = location.name.split(',')[0].trim();
     const stateAbbr = location.name.split(',')[1]?.trim() || 'MI';
 

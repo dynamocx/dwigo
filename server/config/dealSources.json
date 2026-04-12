@@ -111,6 +111,60 @@
     "keywords": ["sale", "off", "discount", "special", "clearance"],
     "enabled": true,
     "priority": 2
+  },
+  {
+    "id": "slobones-daily-specials",
+    "merchantName": "Slo' Bones BBQ Smokehaus",
+    "city": "Frankenmuth",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.slobonessmokehaus.com/daily-specials",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main section, .sqs-block-html, .sqs-block-content, article, section",
+      "title": "h1, h2, h3",
+      "desc": "p, li"
+    },
+    "keywords": ["special", "happy hour", "free", "discount", "wing", "kids", "live music"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "birch-run-premium-outlets-deals",
+    "merchantName": "Birch Run Premium Outlets",
+    "city": "Birch Run",
+    "state": "MI",
+    "type": "retail",
+    "category": "Shopping",
+    "url": "https://www.premiumoutlets.com/outlet/birch-run/deals",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "article, [class*='deal'], [class*='offer'], [class*='promo'], [class*='Spotlight'], a[href*='shop.simon.com']",
+      "title": "h2, h3, h4, [class*='title']",
+      "desc": "p, span"
+    },
+    "keywords": ["sale", "off", "discount", "%", "clearance", "code"],
+    "enabled": true,
+    "priority": 2
+  },
+  {
+    "id": "frankenmuth-cvb-events",
+    "merchantName": "Frankenmuth Convention & Visitors Bureau",
+    "city": "Frankenmuth",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://www.frankenmuth.org/events/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "article, .event, main .content-area a, main section",
+      "title": "h2, h3, h4",
+      "desc": "p"
+    },
+    "keywords": ["festival", "event", "oktoberfest", "beer", "ticket", "free"],
+    "enabled": true,
+    "priority": 2
   }
 ]
 

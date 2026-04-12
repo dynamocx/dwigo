@@ -185,7 +185,14 @@ const IngestionReviewPage = () => {
   });
 
   const aiFetchMutation = useMutation({
-    mutationFn: () => fetchDealsWithAI({ categories: ['Dining', 'Entertainment', 'Shopping'], maxDealsPerLocation: 8 }),
+    mutationFn: () => {
+      const preset = DISCOVER_PRESETS[discoverPreset];
+      return fetchDealsWithAI({
+        categories: ['Dining', 'Entertainment', 'Shopping'],
+        maxDealsPerLocation: 8,
+        ...(preset.cities?.length ? { cities: preset.cities } : {}),
+      });
+    },
     onSuccess: (data) => {
       console.log('[AI Real Fetch] Success:', data);
       setTimeout(() => {
@@ -509,9 +516,17 @@ const IngestionReviewPage = () => {
             </Stack>
             <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
               <strong>Scrape Deals from Web</strong> runs <code>server/config/dealSources.json</code> only (fixed
-              merchants/URLs/selectors — mostly mid-Michigan pilot sites). It does <strong>not</strong> follow the
-              Discover Dining area menu. For Frankenmuth · Birch Run · Bridgeport venues, use{' '}
+              merchants/URLs/selectors — includes Slo Bones daily specials, Birch Run outlet deals page, Frankenmuth CVB
+              events, plus Lansing/Fenton sources). It ignores the area dropdown. For broad venue discovery use{' '}
               <strong>Discover Dining</strong>.
+            </Typography>
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
+              <strong>AI: Real (Places + website)</strong> uses Google Places Text Search per city (same city list as the
+              dropdown when the preset has <code>cities[]</code>; <strong>Wide</strong> falls back to Lansing · Flint ·
+              Grand Blanc · Fenton only). For each place it fetches the merchant <strong>homepage with static HTTP only</strong>{' '}
+              (no Playwright), then runs strict LLM extraction for at most one offer-like deal per place. Many sites need
+              JS rendering — use <strong>Discover Dining</strong> for Playwright + follow-up paths + optional Maps text.
+              Tuning: POST body <code>categories</code>, <code>maxDealsPerLocation</code> (default 8), <code>cities</code>.
             </Typography>
           </Stack>
 

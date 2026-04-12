@@ -100,13 +100,17 @@ export const submitManualDeal = (deal: ManualDealEntry) =>
     buildConfig()
   );
 
-/** Places-verified merchants → website HTML → strict LLM extraction (real offers only). */
-export const fetchDealsWithAI = (options?: { categories?: string[]; maxDealsPerLocation?: number }) =>
-  dwigo.post<{ categories?: string[]; maxDealsPerLocation?: number }, { message: string; dealCount: number; jobId: string; stats: unknown }>(
-    '/admin/ai/fetch-deals',
-    options || {},
-    buildConfig()
-  );
+/** Places-verified merchants → website HTML → strict LLM extraction (real offers only). Static HTML only (no Playwright). */
+export const fetchDealsWithAI = (options?: {
+  categories?: string[];
+  maxDealsPerLocation?: number;
+  /** When set, only these cities (match admin Discover Dining presets). Omit = Lansing/Flint/Grand Blanc/Fenton only. */
+  cities?: string[];
+}) =>
+  dwigo.post<
+    { categories?: string[]; maxDealsPerLocation?: number; cities?: string[] },
+    { message: string; dealCount: number; jobId: string; stats: unknown }
+  >('/admin/ai/fetch-deals', options || {}, buildConfig());
 
 /** Demo / investor deck: LLM-invented offers for real merchant names (synthetic — verify before promote). */
 export const fetchDealsWithAIDemo = (options?: { categories?: string[]; maxDealsPerLocation?: number }) =>
