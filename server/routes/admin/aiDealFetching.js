@@ -472,9 +472,13 @@ router.post('/scrape-deals', async (req, res) => {
     console.log('[admin/ai] Starting web scraping deal discovery...');
     console.log('[admin/ai] This should ONLY produce deals with source "scraper:web"');
 
+    const citiesFilter = Array.isArray(req.body?.cities)
+      ? req.body.cities.map((c) => String(c).trim()).filter(Boolean)
+      : undefined;
+
     let result;
     try {
-      result = await scrapeAndIngest();
+      result = await scrapeAndIngest(citiesFilter?.length ? { cities: citiesFilter } : {});
       
       // Verify the result has the correct source
       console.log('[admin/ai] Scraper result:', {

@@ -19,8 +19,10 @@ const DEAL_SOURCES_PATH = path.join(__dirname, '../../config/dealSources.json');
  *
  * Optional env: SCRAPER_CATEGORY_FILTER — e.g. "Dining" to run only food/drink venues
  * for a POC (matches each source's `category` field). Leave unset to scrape all enabled sources.
+ *
+ * @param {{ citiesFilter?: string[] }} [options] — if citiesFilter non-empty, keep sources whose `city` matches (case-insensitive)
  */
-function loadDealSources() {
+function loadDealSources(options = {}) {
   try {
     const data = fs.readFileSync(DEAL_SOURCES_PATH, 'utf8');
     let sources = JSON.parse(data);
@@ -33,6 +35,16 @@ function loadDealSources() {
       sources = sources.filter((s) => (s.category || '').toLowerCase() === want);
       console.log(
         `[scraperService] SCRAPER_CATEGORY_FILTER="${categoryFilter}": ${before} → ${sources.length} source(s)`
+      );
+    }
+
+    const cf = options.citiesFilter;
+    if (Array.isArray(cf) && cf.length > 0) {
+      const want = new Set(cf.map((c) => String(c).toLowerCase().trim()).filter(Boolean));
+      const before = sources.length;
+      sources = sources.filter((s) => want.has(String(s.city || '').toLowerCase().trim()));
+      console.log(
+        `[scraperService] cities filter [${[...want].join(', ')}]: ${before} → ${sources.length} source(s)`
       );
     }
 
@@ -452,10 +464,10 @@ async function scrapeSource(sourceConfig) {
 }
 
 /**
- * Scrape all enabled sources
+ * Scrape enabled sources (optionally narrowed by loadOptions passed to loadDealSources).
  */
-async function scrapeAllSources() {
-  const sources = loadDealSources();
+async function scrapeAllSources(loadOptions = {}) {
+  const sources = loadDealSources(loadOptions);
   const results = [];
 
   console.log(`[scraperService] Starting scrape of ${sources.length} sources`);
@@ -483,17 +495,26 @@ async function scrapeAllSources() {
 
 /**
  * Scrape sources and ingest deals
+ * @param {{ cities?: string[] }} [options] — optional city names matching `dealSources.json` `city` (omit or empty = all sources)
  */
-async function scrapeAndIngest() {
+async function scrapeAndIngest(options = {}) {
   console.log('[scraperService] Starting scrapeAndIngest...');
-  const sources = loadDealSources();
+  const loadOpts = {};
+  if (Array.isArray(options.cities) && options.cities.length > 0) {
+    loadOpts.citiesFilter = options.cities.map((c) => String(c).trim()).filter(Boolean);
+  }
+  const sources = loadDealSources(loadOpts);
   console.log(`[scraperService] Loaded ${sources.length} deal sources`);
   
   if (sources.length === 0) {
-    console.warn('[scraperService] No deal sources configured! Check server/config/dealSources.json');
+    console.warn(
+      '[scraperService] No deal sources to scrape (check dealSources.json, SCRAPER_CATEGORY_FILTER, or city filter)'
+    );
     return {
       success: false,
-      error: 'No deal sources configured',
+      error: loadOpts.citiesFilter?.length
+        ? 'No deal sources match the selected cities'
+        : 'No deal sources configured',
       sourcesScraped: 0,
       dealsExtracted: 0,
       dealsIngested: 0,
@@ -501,7 +522,7 @@ async function scrapeAndIngest() {
     };
   }
   
-  const results = await scrapeAllSources();
+  const results = await scrapeAllSources(loadOpts);
   
   // Log detailed results
   console.log(`[scraperService] Scraping completed. Results:`, results.map(r => ({

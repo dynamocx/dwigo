@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Alert,
@@ -9,7 +9,9 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  ListItemText,
   MenuItem,
+  OutlinedInput,
   Select,
   Stack,
   Typography,
@@ -40,8 +42,24 @@ import {
   type DiscoverDiningScrapePayload,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
+import { PRESET_LOCATIONS } from '@/contexts/LocationContext';
 import { assessDealQuality } from '@/utils/dealQuality';
 import DealEntryForm from './DealEntryForm';
+
+/** Cities in dealSources.json not always on locator list (e.g. Mason). */
+const ADMIN_EXTRA_CITIES: { value: string; label: string }[] = [{ value: 'Mason', label: 'Mason, MI' }];
+
+function buildAdminCityPickerOptions(): { value: string; label: string }[] {
+  const m = new Map<string, string>();
+  for (const l of PRESET_LOCATIONS) {
+    const city = l.name.split(',')[0].trim();
+    m.set(city, l.name);
+  }
+  for (const e of ADMIN_EXTRA_CITIES) {
+    if (!m.has(e.value)) m.set(e.value, e.label);
+  }
+  return [...m.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+}
 
 const DISCOVER_PRESET_IDS = [
   'flint',
@@ -140,6 +158,9 @@ const IngestionReviewPage = () => {
   const [tabValue, setTabValue] = useState(0); // 0 = Auto-Seeding, 1 = Add Deals
   const [selectedDeals, setSelectedDeals] = useState<number[]>([]);
   const [discoverPreset, setDiscoverPreset] = useState<DiscoverPresetId>('flint');
+  const [webScrapeCities, setWebScrapeCities] = useState<string[]>([]);
+  const [aiRealCities, setAiRealCities] = useState<string[]>([]);
+  const adminCityOptions = useMemo(() => buildAdminCityPickerOptions(), []);
 
   const pendingQuery = useQuery({
     queryKey: ['admin-ingestion-pending', limit],
@@ -185,14 +206,12 @@ const IngestionReviewPage = () => {
   });
 
   const aiFetchMutation = useMutation({
-    mutationFn: () => {
-      const preset = DISCOVER_PRESETS[discoverPreset];
-      return fetchDealsWithAI({
+    mutationFn: () =>
+      fetchDealsWithAI({
         categories: ['Dining', 'Entertainment', 'Shopping'],
         maxDealsPerLocation: 8,
-        ...(preset.cities?.length ? { cities: preset.cities } : {}),
-      });
-    },
+        ...(aiRealCities.length > 0 ? { cities: aiRealCities } : {}),
+      }),
     onSuccess: (data) => {
       console.log('[AI Real Fetch] Success:', data);
       setTimeout(() => {
@@ -230,7 +249,8 @@ const IngestionReviewPage = () => {
   });
 
   const scrapeMutation = useMutation({
-    mutationFn: () => scrapeDealsFromWeb(),
+    mutationFn: () =>
+      scrapeDealsFromWeb(webScrapeCities.length > 0 ? { cities: webScrapeCities } : undefined),
     onSuccess: (data) => {
       console.log('[Scrape] Success:', data);
       // Wait a moment for the job to process, then refresh
@@ -435,6 +455,65 @@ const IngestionReviewPage = () => {
               </Select>
             </FormControl>
 
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
+              <FormControl size="small" sx={{ minWidth: 280, maxWidth: 440 }}>
+                <InputLabel id="web-scrape-cities-label">Web scrape cities</InputLabel>
+                <Select
+                  labelId="web-scrape-cities-label"
+                  label="Web scrape cities"
+                  multiple
+                  value={webScrapeCities}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setWebScrapeCities(typeof v === 'string' ? v.split(',') : [...v]);
+                  }}
+                  input={<OutlinedInput label="Web scrape cities" />}
+                  renderValue={(selected) =>
+                    (selected as string[]).length === 0
+                      ? 'All cities (every dealSources.json row)'
+                      : (selected as string[]).join(', ')
+                  }
+                  disabled={scrapeMutation.isPending}
+                  MenuProps={{ PaperProps: { style: { maxHeight: 320 } } }}
+                >
+                  {adminCityOptions.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>
+                      <Checkbox checked={webScrapeCities.indexOf(o.value) > -1} size="small" sx={{ mr: 0.5 }} />
+                      <ListItemText primary={o.label} primaryTypographyProps={{ variant: 'body2' }} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 280, maxWidth: 440 }}>
+                <InputLabel id="ai-real-cities-label">AI Real — Places cities</InputLabel>
+                <Select
+                  labelId="ai-real-cities-label"
+                  label="AI Real — Places cities"
+                  multiple
+                  value={aiRealCities}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAiRealCities(typeof v === 'string' ? v.split(',') : [...v]);
+                  }}
+                  input={<OutlinedInput label="AI Real — Places cities" />}
+                  renderValue={(selected) =>
+                    (selected as string[]).length === 0
+                      ? 'Default (Lansing · Flint · Grand Blanc · Fenton)'
+                      : (selected as string[]).join(', ')
+                  }
+                  disabled={aiFetchMutation.isPending}
+                  MenuProps={{ PaperProps: { style: { maxHeight: 320 } } }}
+                >
+                  {adminCityOptions.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>
+                      <Checkbox checked={aiRealCities.indexOf(o.value) > -1} size="small" sx={{ mr: 0.5 }} />
+                      <ListItemText primary={o.label} primaryTypographyProps={{ variant: 'body2' }} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+
             <Stack direction="row" spacing={2} flexWrap="wrap">
               <Button
                 variant="contained"
@@ -520,18 +599,14 @@ const IngestionReviewPage = () => {
               </Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
-              <strong>Scrape Deals from Web</strong> runs <code>server/config/dealSources.json</code> only (fixed
-              merchants/URLs/selectors — includes Slo Bones daily specials, Birch Run outlet deals page, Frankenmuth CVB
-              events, plus Lansing/Fenton sources). It ignores the area dropdown. For broad venue discovery use{' '}
-              <strong>Discover Dining</strong>.
+              <strong>Web scrape cities</strong>: leave empty to run every enabled row in{' '}
+              <code>dealSources.json</code>. Select one or more cities to only scrape sources whose <code>city</code>{' '}
+              field matches (e.g. Frankenmuth + Birch Run). Independent of Discover Dining.
             </Typography>
             <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
-              <strong>AI: Real (Places + website)</strong> runs as an <strong>async server job</strong> (202 + poll — same
-              idea as Discover Dining) so the browser does not hit a network timeout. It uses Google Places Text Search per
-              city (same city list as the dropdown when the preset has <code>cities[]</code>; <strong>Wide</strong> falls
-              back to Lansing · Flint · Grand Blanc · Fenton only). Each place: <strong>homepage via static HTTP only</strong>{' '}
-              (no Playwright), then strict LLM extraction. Scripts can use POST <code>{'{ "wait": true }'}</code> for one
-              long response. Tuning: <code>categories</code>, <code>maxDealsPerLocation</code>, <code>cities</code>.
+              <strong>AI Real — Places cities</strong>: leave empty for the default four pilots (Lansing, Flint, Grand
+              Blanc, Fenton). Multi-select any pilot cities to scope Places + static homepage extraction — independent of
+              the Discover Dining area menu. Async job + poll; optional POST <code>{'{ "wait": true }'}</code> for scripts.
             </Typography>
           </Stack>
 

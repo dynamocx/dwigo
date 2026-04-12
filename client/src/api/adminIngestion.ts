@@ -130,12 +130,11 @@ export const fetchDealsWithAIDemo = (options?: { categories?: string[]; maxDeals
     buildConfig()
   );
 
-export const scrapeDealsFromWeb = () =>
-  dwigo.post<never, { message: string; sourcesScraped: number; dealsExtracted: number; dealsIngested: number; jobId: string; stats: unknown }>(
-    '/admin/ai/scrape-deals',
-    undefined,
-    buildConfig()
-  );
+export const scrapeDealsFromWeb = (options?: { cities?: string[] }) =>
+  dwigo.post<
+    { cities?: string[] },
+    { message: string; sourcesScraped: number; dealsExtracted: number; dealsIngested: number; jobId: string; stats: unknown }
+  >('/admin/ai/scrape-deals', options?.cities?.length ? { cities: options.cities } : {}, buildConfig());
 
 export interface DiscoverDiningScrapePayload {
   searchQuery?: string;
