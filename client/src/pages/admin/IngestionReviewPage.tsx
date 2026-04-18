@@ -39,106 +39,15 @@ import {
   fetchDealsWithAIDemo,
   scrapeDealsFromWeb,
   discoverDiningFromPlaces,
-  type DiscoverDiningScrapePayload,
   type IngestedDealRow,
 } from '@/api/adminIngestion';
-import { PRESET_LOCATIONS } from '@/contexts/LocationContext';
+import {
+  DISCOVER_PRESETS,
+  buildAdminCityPickerOptions,
+  type DiscoverPresetId,
+} from '@/pages/admin/adminAutoSeedingConfig';
 import { assessDealQuality } from '@/utils/dealQuality';
 import DealEntryForm from './DealEntryForm';
-
-/** Cities in dealSources.json not always on locator list (e.g. Mason). */
-const ADMIN_EXTRA_CITIES: { value: string; label: string }[] = [{ value: 'Mason', label: 'Mason, MI' }];
-
-function buildAdminCityPickerOptions(): { value: string; label: string }[] {
-  const m = new Map<string, string>();
-  for (const l of PRESET_LOCATIONS) {
-    const city = l.name.split(',')[0].trim();
-    m.set(city, l.name);
-  }
-  for (const e of ADMIN_EXTRA_CITIES) {
-    if (!m.has(e.value)) m.set(e.value, e.label);
-  }
-  return [...m.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-}
-
-const DISCOVER_PRESET_IDS = [
-  'flint',
-  'lansing',
-  'saginaw',
-  'frankenmuth',
-  'east',
-  'kalamazoo',
-  'wide',
-] as const;
-type DiscoverPresetId = (typeof DISCOVER_PRESET_IDS)[number];
-
-/** Few cities per run = faster, more reliable jobs than one huge nearText. Run multiple presets over time. */
-const DISCOVER_PRESETS: Record<DiscoverPresetId, DiscoverDiningScrapePayload> = {
-  flint: {
-    cities: ['Flint', 'Grand Blanc', 'Fenton'],
-    maxPlaces: 14,
-    queryRotationLimit: 5,
-    maxFollowUpUrls: 5,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 3500,
-  },
-  lansing: {
-    cities: ['Lansing', 'East Lansing', 'Okemos'],
-    maxPlaces: 14,
-    queryRotationLimit: 5,
-    maxFollowUpUrls: 5,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 3500,
-  },
-  saginaw: {
-    cities: ['Saginaw', 'Midland', 'Bay City'],
-    maxPlaces: 14,
-    queryRotationLimit: 5,
-    maxFollowUpUrls: 5,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 3500,
-  },
-  frankenmuth: {
-    cities: ['Frankenmuth', 'Bridgeport', 'Birch Run'],
-    maxPlaces: 14,
-    queryRotationLimit: 5,
-    maxFollowUpUrls: 5,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 3500,
-  },
-  east: {
-    cities: ['Owosso', 'Corunna', 'Durand'],
-    maxPlaces: 12,
-    queryRotationLimit: 4,
-    maxFollowUpUrls: 4,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 3500,
-  },
-  kalamazoo: {
-    cities: ['Kalamazoo', 'Portage', 'Battle Creek'],
-    maxPlaces: 14,
-    queryRotationLimit: 5,
-    maxFollowUpUrls: 5,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 3500,
-  },
-  wide: {
-    nearText:
-      'Lansing Flint Grand Blanc Saginaw Midland Bay City Frankenmuth Bridgeport Birch Run Owosso Fenton Grand Rapids Kalamazoo Ann Arbor Michigan',
-    maxPlaces: 18,
-    queryRotationLimit: 6,
-    maxFollowUpUrls: 6,
-    maxDealsPerVenue: 3,
-    maxItemsPerSite: 8,
-    delayBetweenVenuesMs: 4000,
-  },
-};
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -424,53 +333,82 @@ const IngestionReviewPage = () => {
 
       <TabPanel value={tabValue} index={0}>
         <Stack spacing={3}>
-          <Stack spacing={2}>
+          <Stack spacing={1}>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               Automated Deal Seeding
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Pick a <strong>2–3 city</strong> batch per run (faster and more reliable than one giant area). Rotate presets
-              every few days or after deploys. Wide (slow) hits many metros in one job. Keep this tab open until the job
-              finishes; the UI polls the server. When <code>ENABLE_GBP_MAPS_SCRAPE=true</code>, each venue also loads
-              its public Google Maps page (Playwright) to capture visible listing text for the extractor — slower but
-              can surface GBP-style blurbs. Respect Maps ToS.
+              Each card pairs one control with its action. Long jobs need this tab open while the UI polls. Optional Maps
+              text when <code>ENABLE_GBP_MAPS_SCRAPE=true</code> (respect Google Maps ToS).
             </Typography>
+          </Stack>
 
-            <FormControl size="small" sx={{ maxWidth: 420 }}>
-              <InputLabel id="discover-dining-area-label">Discover Dining area</InputLabel>
-              <Select
-                labelId="discover-dining-area-label"
-                label="Discover Dining area"
-                value={discoverPreset}
-                onChange={(e) => setDiscoverPreset(e.target.value as DiscoverPresetId)}
-                disabled={discoverDiningMutation.isPending}
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 600 }}>
+              Discover Dining
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-end' }}>
+              <FormControl size="small" fullWidth sx={{ maxWidth: { sm: 440 } }}>
+                <InputLabel id="discover-dining-area-label">Area preset</InputLabel>
+                <Select
+                  labelId="discover-dining-area-label"
+                  label="Area preset"
+                  value={discoverPreset}
+                  onChange={(e) => setDiscoverPreset(e.target.value as DiscoverPresetId)}
+                  disabled={discoverDiningMutation.isPending}
+                >
+                  <MenuItem value="flint">Flint · Grand Blanc · Fenton</MenuItem>
+                  <MenuItem value="lansing">Lansing · East Lansing · Okemos</MenuItem>
+                  <MenuItem value="saginaw">Saginaw · Midland · Bay City</MenuItem>
+                  <MenuItem value="frankenmuth">Frankenmuth · Bridgeport · Birch Run</MenuItem>
+                  <MenuItem value="east">Owosso · Corunna · Durand</MenuItem>
+                  <MenuItem value="kalamazoo">Kalamazoo · Portage · Battle Creek</MenuItem>
+                  <MenuItem value="wide">Wide (all major pilot cities — slow)</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => discoverDiningMutation.mutate()}
+                disabled={
+                  discoverDiningMutation.isPending ||
+                  scrapeMutation.isPending ||
+                  aiFetchMutation.isPending ||
+                  aiDemoFetchMutation.isPending
+                }
+                size="large"
+                sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' }, minWidth: { sm: 280 } }}
               >
-                <MenuItem value="flint">Flint · Grand Blanc · Fenton</MenuItem>
-                <MenuItem value="lansing">Lansing · East Lansing · Okemos</MenuItem>
-                <MenuItem value="saginaw">Saginaw · Midland · Bay City</MenuItem>
-                <MenuItem value="frankenmuth">Frankenmuth · Bridgeport · Birch Run</MenuItem>
-                <MenuItem value="east">Owosso · Corunna · Durand</MenuItem>
-                <MenuItem value="kalamazoo">Kalamazoo · Portage · Battle Creek</MenuItem>
-                <MenuItem value="wide">Wide (all major pilot cities — slow)</MenuItem>
-              </Select>
-            </FormControl>
+                {discoverDiningMutation.isPending
+                  ? 'Running… (keep tab open)'
+                  : '📍 Discover Dining (Places → websites)'}
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+              2–3 city batches per preset. Playwright + optional GBP Maps snippet merge with website scrape.
+            </Typography>
+          </Paper>
 
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} flexWrap="wrap" useFlexGap>
-              <FormControl size="small" sx={{ minWidth: 280, maxWidth: 440 }}>
-                <InputLabel id="web-scrape-cities-label">Web scrape cities</InputLabel>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 600 }}>
+              Scrape Deals from Web
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-end' }}>
+              <FormControl size="small" fullWidth sx={{ maxWidth: { sm: 440 } }}>
+                <InputLabel id="web-scrape-cities-label">Cities (dealSources.json)</InputLabel>
                 <Select
                   labelId="web-scrape-cities-label"
-                  label="Web scrape cities"
+                  label="Cities (dealSources.json)"
                   multiple
                   value={webScrapeCities}
                   onChange={(e) => {
                     const v = e.target.value;
                     setWebScrapeCities(typeof v === 'string' ? v.split(',') : [...v]);
                   }}
-                  input={<OutlinedInput label="Web scrape cities" />}
+                  input={<OutlinedInput label="Cities (dealSources.json)" />}
                   renderValue={(selected) =>
                     (selected as string[]).length === 0
-                      ? 'All cities (every dealSources.json row)'
+                      ? 'All cities — every enabled source'
                       : (selected as string[]).join(', ')
                   }
                   disabled={scrapeMutation.isPending}
@@ -484,21 +422,47 @@ const IngestionReviewPage = () => {
                   ))}
                 </Select>
               </FormControl>
-              <FormControl size="small" sx={{ minWidth: 280, maxWidth: 440 }}>
-                <InputLabel id="ai-real-cities-label">AI Real — Places cities</InputLabel>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => scrapeMutation.mutate()}
+                disabled={
+                  scrapeMutation.isPending ||
+                  discoverDiningMutation.isPending ||
+                  aiFetchMutation.isPending ||
+                  aiDemoFetchMutation.isPending
+                }
+                size="large"
+                sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' }, minWidth: { sm: 280 } }}
+              >
+                {scrapeMutation.isPending ? 'Scraping…' : '🌐 Scrape Deals from Web'}
+              </Button>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+              Empty = all enabled rows. Otherwise only sources whose <code>city</code> matches a selection.
+            </Typography>
+          </Paper>
+
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 600 }}>
+              AI: Real (Places + website)
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'flex-end' }}>
+              <FormControl size="small" fullWidth sx={{ maxWidth: { sm: 440 } }}>
+                <InputLabel id="ai-real-cities-label">Places cities</InputLabel>
                 <Select
                   labelId="ai-real-cities-label"
-                  label="AI Real — Places cities"
+                  label="Places cities"
                   multiple
                   value={aiRealCities}
                   onChange={(e) => {
                     const v = e.target.value;
                     setAiRealCities(typeof v === 'string' ? v.split(',') : [...v]);
                   }}
-                  input={<OutlinedInput label="AI Real — Places cities" />}
+                  input={<OutlinedInput label="Places cities" />}
                   renderValue={(selected) =>
                     (selected as string[]).length === 0
-                      ? 'Default (Lansing · Flint · Grand Blanc · Fenton)'
+                      ? 'Default — Lansing, Flint, Grand Blanc, Fenton'
                       : (selected as string[]).join(', ')
                   }
                   disabled={aiFetchMutation.isPending}
@@ -512,39 +476,6 @@ const IngestionReviewPage = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Stack>
-
-            <Stack direction="row" spacing={2} flexWrap="wrap">
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={() => discoverDiningMutation.mutate()}
-                disabled={
-                  discoverDiningMutation.isPending ||
-                  scrapeMutation.isPending ||
-                  aiFetchMutation.isPending ||
-                  aiDemoFetchMutation.isPending
-                }
-                size="large"
-              >
-                {discoverDiningMutation.isPending
-                  ? 'Discover Dining… (server job, many min — keep tab open)'
-                  : '📍 Discover Dining (Places → websites)'}
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => scrapeMutation.mutate()}
-                disabled={
-                  scrapeMutation.isPending ||
-                  discoverDiningMutation.isPending ||
-                  aiFetchMutation.isPending ||
-                  aiDemoFetchMutation.isPending
-                }
-                size="large"
-              >
-                {scrapeMutation.isPending ? 'Scraping...' : '🌐 Scrape Deals from Web'}
-              </Button>
               <Button
                 variant="outlined"
                 color="success"
@@ -556,58 +487,56 @@ const IngestionReviewPage = () => {
                   scrapeMutation.isPending
                 }
                 size="large"
+                sx={{ flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'auto' }, minWidth: { sm: 280 } }}
               >
-                {aiFetchMutation.isPending
-                  ? 'AI Real… (server job — keep tab open, polling)'
-                  : '🤖 AI: Real (Places + website)'}
-              </Button>
-              <Button
-                variant="outlined"
-                color="warning"
-                onClick={() => aiDemoFetchMutation.mutate()}
-                disabled={
-                  aiDemoFetchMutation.isPending ||
-                  aiFetchMutation.isPending ||
-                  discoverDiningMutation.isPending ||
-                  scrapeMutation.isPending
-                }
-                size="large"
-              >
-                {aiDemoFetchMutation.isPending ? 'Generating…' : '🎭 AI: Demo (synthetic)'}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => seedMidMichiganMutation.mutate()}
-                disabled={
-                  seedMidMichiganMutation.isPending ||
-                  aiFetchMutation.isPending ||
-                  aiDemoFetchMutation.isPending
-                }
-                size="large"
-              >
-                {seedMidMichiganMutation.isPending ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={() => seedMutation.mutate()}
-                disabled={
-                  seedMutation.isPending || aiFetchMutation.isPending || aiDemoFetchMutation.isPending
-                }
-                size="large"
-              >
-                {seedMutation.isPending ? 'Seeding...' : 'Seed Test Deals'}
+                {aiFetchMutation.isPending ? 'Running… (polling)' : '🤖 AI: Real (Places + website)'}
               </Button>
             </Stack>
-            <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
-              <strong>Web scrape cities</strong>: leave empty to run every enabled row in{' '}
-              <code>dealSources.json</code>. Select one or more cities to only scrape sources whose <code>city</code>{' '}
-              field matches (e.g. Frankenmuth + Birch Run). Independent of Discover Dining.
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+              Static homepage fetch per place (no Playwright). Async job + poll. Scripts: POST{' '}
+              <code>{'{ "wait": true }'}</code>.
             </Typography>
-            <Typography variant="caption" color="text.secondary" component="p" sx={{ maxWidth: 720 }}>
-              <strong>AI Real — Places cities</strong>: leave empty for the default four pilots (Lansing, Flint, Grand
-              Blanc, Fenton). Multi-select any pilot cities to scope Places + static homepage extraction — independent of
-              the Discover Dining area menu. Async job + poll; optional POST <code>{'{ "wait": true }'}</code> for scripts.
-            </Typography>
+          </Paper>
+
+          <Divider />
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            Other seeding
+          </Typography>
+          <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={() => aiDemoFetchMutation.mutate()}
+              disabled={
+                aiDemoFetchMutation.isPending ||
+                aiFetchMutation.isPending ||
+                discoverDiningMutation.isPending ||
+                scrapeMutation.isPending
+              }
+              size="large"
+            >
+              {aiDemoFetchMutation.isPending ? 'Generating…' : '🎭 AI: Demo (synthetic)'}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => seedMidMichiganMutation.mutate()}
+              disabled={
+                seedMidMichiganMutation.isPending ||
+                aiFetchMutation.isPending ||
+                aiDemoFetchMutation.isPending
+              }
+              size="large"
+            >
+              {seedMidMichiganMutation.isPending ? 'Seeding...' : 'Seed Mid-Michigan Deals'}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isPending || aiFetchMutation.isPending || aiDemoFetchMutation.isPending}
+              size="large"
+            >
+              {seedMutation.isPending ? 'Seeding...' : 'Seed Test Deals'}
+            </Button>
           </Stack>
 
           {rows.length === 0 && !pendingQuery.isLoading ? (
