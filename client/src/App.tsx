@@ -18,6 +18,7 @@ import ProfileHubPage from '@/pages/ProfileHubPage';
 import DealBasketPage from '@/pages/DealBasketPage';
 import RegisterPage from '@/pages/RegisterPage';
 import RewardsPage from '@/pages/RewardsPage';
+import DealSourcesPage from '@/pages/admin/DealSourcesPage';
 import IngestionReviewPage from '@/pages/admin/IngestionReviewPage';
 
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
@@ -78,6 +79,7 @@ function App() {
         />
       </Route>
       <Route path="admin/ingestion" element={<IngestionReviewPage />} />
+      <Route path="admin/deal-sources" element={<DealSourcesPage />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="forgot-password" element={<ForgotPasswordPage />} />
       <Route path="reset-password" element={<ResetPasswordPage />} />

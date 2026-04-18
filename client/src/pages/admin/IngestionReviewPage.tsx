@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 
 import {
   Alert,
@@ -9,6 +10,7 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  Link,
   ListItemText,
   MenuItem,
   OutlinedInput,
@@ -203,17 +205,22 @@ const IngestionReviewPage = () => {
 
   return (
     <Stack spacing={3} sx={{ p: 3 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
+      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Ingestion Review
         </Typography>
-        <IconButton
-          aria-label="refresh"
-          onClick={() => pendingQuery.refetch()}
-          disabled={pendingQuery.isFetching}
-        >
-          <RefreshIcon />
-        </IconButton>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button component={RouterLink} to="/admin/deal-sources" variant="outlined" size="small">
+            Web scrape sources
+          </Button>
+          <IconButton
+            aria-label="refresh"
+            onClick={() => pendingQuery.refetch()}
+            disabled={pendingQuery.isFetching}
+          >
+            <RefreshIcon />
+          </IconButton>
+        </Stack>
       </Stack>
 
       {pendingQuery.isLoading ? (
@@ -439,7 +446,11 @@ const IngestionReviewPage = () => {
               </Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
-              Empty = all enabled rows. Otherwise only sources whose <code>city</code> matches a selection.
+              Empty = all enabled rows. Otherwise only sources whose <code>city</code> matches a selection.{' '}
+              <Link component={RouterLink} to="/admin/deal-sources" underline="hover">
+                Review configured URLs by city
+              </Link>
+              .
             </Typography>
           </Paper>
 
