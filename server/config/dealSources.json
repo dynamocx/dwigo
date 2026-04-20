@@ -9,12 +9,11 @@
     "url": "https://www.fentonbrewery.com/events",
     "fetchMode": "renderedHtml",
     "selectors": {
-      "item": ".event-card, .event-item, article.event",
-      "title": "h3, h2, .event-title",
-      "desc": ".description, .event-description, p",
-      "date": ".date, .event-date, time"
+      "item": "main, article, #content, .content, .site-content",
+      "title": "h1, h2, h3",
+      "desc": "p, li"
     },
-    "keywords": ["off", "discount", "happy hour", "special", "$", "flight", "growler"],
+    "keywords": [],
     "enabled": true,
     "priority": 1
   },
@@ -26,13 +25,13 @@
     "type": "restaurant",
     "category": "Dining",
     "url": "https://lunchandbeyond.com/specials/",
-    "fetchMode": "staticHtml",
+    "fetchMode": "renderedHtml",
     "selectors": {
-      "item": ".deal, .special, .promotion, .offer",
-      "title": ".deal-title, h3, h2",
-      "desc": ".deal-body, .deal-description, p"
+      "item": "main, article, #content, .content, .entry-content, .site-content",
+      "title": "h1, h2, h3",
+      "desc": "p, li"
     },
-    "keywords": ["special", "off", "discount", "happy hour", "deal"],
+    "keywords": [],
     "enabled": true,
     "priority": 1
   },
@@ -44,13 +43,13 @@
     "type": "restaurant",
     "category": "Dining",
     "url": "https://www.111fenton.com/happy-hour.html",
-    "fetchMode": "staticHtml",
+    "fetchMode": "renderedHtml",
     "selectors": {
-      "item": "main section, main article, main .content, main .col, main .column, section",
-      "title": "h2, h3, strong, b",
+      "item": "main, article, #content, .content, .entry-content, .site-content",
+      "title": "h1, h2, h3",
       "desc": "p, li"
     },
-    "keywords": ["happy hour", "special", "off", "discount", "$", "deal"],
+    "keywords": [],
     "enabled": true,
     "priority": 1
   },
