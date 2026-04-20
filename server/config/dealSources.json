@@ -24,11 +24,11 @@
     "state": "MI",
     "type": "restaurant",
     "category": "Dining",
-    "url": "https://lunchandbeyond.com/specials/",
+    "url": "https://lunchandbeyond.com/",
     "fetchMode": "renderedHtml",
     "selectors": {
-      "item": "main, article, #content, .content, .entry-content, .site-content",
-      "title": "h1, h2, h3",
+      "item": "main, article, section, [class*='promo'], [class*='special'], [class*='offer'], [class*='event'], [class*='slider'], [class*='tile'], [class*='instagram'], #content, .content, .entry-content, .site-content",
+      "title": "h1, h2, h3, strong",
       "desc": "p, li"
     },
     "keywords": [],
