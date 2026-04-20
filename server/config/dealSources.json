@@ -25,7 +25,7 @@
     "state": "MI",
     "type": "restaurant",
     "category": "Dining",
-    "url": "https://www.thelaundry.com/specials",
+    "url": "https://lunchandbeyond.com/specials/",
     "fetchMode": "staticHtml",
     "selectors": {
       "item": ".deal, .special, .promotion, .offer",
@@ -33,6 +33,24 @@
       "desc": ".deal-body, .deal-description, p"
     },
     "keywords": ["special", "off", "discount", "happy hour", "deal"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "oneeleven-fenton",
+    "merchantName": "One Eleven",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.111fenton.com/happy-hour.html",
+    "fetchMode": "staticHtml",
+    "selectors": {
+      "item": "main section, main article, main .content, main .col, main .column, section",
+      "title": "h2, h3, strong, b",
+      "desc": "p, li"
+    },
+    "keywords": ["happy hour", "special", "off", "discount", "$", "deal"],
     "enabled": true,
     "priority": 1
   },
