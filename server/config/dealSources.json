@@ -54,6 +54,114 @@
     "priority": 1
   },
   {
+    "id": "fentonhotel-specials",
+    "merchantName": "Fenton Hotel Tavern & Grille",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.fentonhotel.com/daily-specials",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "fentonhotel-entertainment",
+    "merchantName": "Fenton Hotel Tavern & Grille",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://www.fentonhotel.com/live-entertainment",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "fentonhotel-happyhour",
+    "merchantName": "Fenton Hotel Tavern & Grille",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.fentonhotel.com/happyhourmenu",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "railyard-fenton",
+    "merchantName": "RailYard Fenton",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://www.railyardfenton.com/eat-drink",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "cornerbar-fenton",
+    "merchantName": "Corner Bar & Grill",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://www.cbgfenton.com/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": ["karaoke", "live music", "brunch", "special", "event"],
+    "enabled": true,
+    "priority": 2
+  },
+  {
+    "id": "fenton-tickets",
+    "merchantName": "Fenton & Linden Restaurant Week",
+    "city": "Fenton",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Dining",
+    "url": "https://www.fentontickets.com/restaurant-week",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 2
+  },
+  {
     "id": "lansingbrewing",
     "merchantName": "Lansing Brewing Company",
     "city": "Lansing",
@@ -69,6 +177,372 @@
       "date": ".date, .event-date"
     },
     "keywords": ["off", "$", "discount", "special", "event"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "westgate-tavern-specials",
+    "merchantName": "Westgate Tavern & Grill",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://westgatetavern.com/specials",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "westgate-tavern-events",
+    "merchantName": "Westgate Tavern & Grill",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://westgatetavern.com/events",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "ellison-brewery-events",
+    "merchantName": "Ellison Brewery + Spirits",
+    "city": "East Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://ellisonbrewing.com/events/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, .event, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "crunchys-specials",
+    "merchantName": "Crunchy's",
+    "city": "East Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://crunchyseastlansing.com/specials/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "crunchys-events",
+    "merchantName": "Crunchy's",
+    "city": "East Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://crunchyseastlansing.com/weekly-events/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "ozones-brewhouse",
+    "merchantName": "Ozone's Brewhouse",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.ozonesbrewhouse.com/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": ["special", "event", "happy hour", "live", "trivia"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "lansing-org-dining-deals",
+    "merchantName": "Greater Lansing CVB",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Dining",
+    "url": "https://www.lansing.org/restaurants/deals/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .listing, .card, [class*='deal'], [class*='offer'], section",
+      "title": "h2, h3, h4, strong",
+      "desc": "p, li, span"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "lansing-org-events",
+    "merchantName": "Greater Lansing CVB",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://www.lansing.org/events/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .listing, .card, .event, [class*='event'], section",
+      "title": "h2, h3, h4, strong",
+      "desc": "p, li, span",
+      "date": "time, .date, [class*='date']"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "lansing-org-special-offers",
+    "merchantName": "Greater Lansing CVB",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Shopping",
+    "url": "https://www.lansing.org/plan-your-trip/special-offers/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .listing, .card, [class*='deal'], [class*='offer'], section",
+      "title": "h2, h3, h4, strong",
+      "desc": "p, li, span"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "downtownlansing",
+    "merchantName": "Downtown Lansing Inc.",
+    "city": "Lansing",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://www.downtownlansing.org/events",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": ".event, .event-card, .event-item",
+      "title": "h3, h2, .event-title",
+      "desc": ".description, .event-details, p",
+      "date": ".date, .event-date, time"
+    },
+    "keywords": ["deal", "special", "discount", "off", "promotion"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "soggy-bottom-flint",
+    "merchantName": "Soggy Bottom Bar",
+    "city": "Flint",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.soggybottombarflint.com/menu",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": ["special", "happy hour", "event", "live music", "craft"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "scooters-flint",
+    "merchantName": "Scooters Bar & Grill",
+    "city": "Flint",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://scootersbarandgrillflint.com/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": ["special", "live music", "event", "band", "happy hour"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "blondies-flint",
+    "merchantName": "Blondie's Food & Spirits",
+    "city": "Flint",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://blondiesfoodandspirits.com/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": ["special", "event", "live music", "happy hour", "craft beer"],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "flint-farmers-market-events",
+    "merchantName": "Flint Farmers' Market",
+    "city": "Flint",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://www.flintfarmersmarket.com/events-list/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .event, .listing, [class*='event'], section",
+      "title": "h2, h3, h4, strong",
+      "desc": "p, li, span",
+      "date": "time, .date, [class*='date']"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "flint-dda-businesses",
+    "merchantName": "Flint DDA",
+    "city": "Flint",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Shopping",
+    "url": "https://flintdda.org/local-businesses/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .listing, .card, [class*='business'], section",
+      "title": "h2, h3, h4, strong",
+      "desc": "p, li, span"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 2
+  },
+  {
+    "id": "explore-flint-genesee-events",
+    "merchantName": "Explore Flint & Genesee",
+    "city": "Flint",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://www.exploreflintandgenesee.org/restaurants/downtown-flint/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .listing, .card, [class*='restaurant'], section",
+      "title": "h2, h3, h4, strong",
+      "desc": "p, li, span"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 2
+  },
+  {
+    "id": "geneseefun-events",
+    "merchantName": "GeneseeFun.com",
+    "city": "Flint",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://geneseefun.com/event/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .type-tribe_events, .tribe-events-calendar, [class*='event'], section",
+      "title": "h2, h3, h4, strong, a",
+      "desc": "p, li, span",
+      "date": "time, .date, [class*='date'], .tribe-event-schedule-details"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "irenes-grand-blanc-events",
+    "merchantName": "Irene's Craft Kitchen & Biergarten",
+    "city": "Grand Blanc",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Entertainment",
+    "url": "https://www.irenesgb.com/event-list",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, [class*='event'], #content, .content, .site-content",
+      "title": "h1, h2, h3, strong, a",
+      "desc": "p, li, span",
+      "date": "time, .date, [class*='date']"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "grand-blanc-chamber-events",
+    "merchantName": "Grand Blanc Chamber of Commerce",
+    "city": "Grand Blanc",
+    "state": "MI",
+    "type": "aggregator",
+    "category": "Entertainment",
+    "url": "https://business.grandblancchamberofcommerce.com/events",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main article, .listing, .card, [class*='event'], section",
+      "title": "h2, h3, h4, strong, a",
+      "desc": "p, li, span",
+      "date": "time, .date, [class*='date']"
+    },
+    "keywords": [],
+    "enabled": true,
+    "priority": 1
+  },
+  {
+    "id": "social-house-flint",
+    "merchantName": "Social House",
+    "city": "Flint",
+    "state": "MI",
+    "type": "restaurant",
+    "category": "Dining",
+    "url": "https://www.socialhousegourmet.com/",
+    "fetchMode": "renderedHtml",
+    "selectors": {
+      "item": "main, article, section, #content, .content, .site-content",
+      "title": "h1, h2, h3, strong",
+      "desc": "p, li"
+    },
+    "keywords": ["special", "event", "happy hour", "cocktail", "craft"],
     "enabled": true,
     "priority": 1
   },
@@ -90,25 +564,6 @@
     "keywords": ["sale", "off", "discount", "special", "promotion"],
     "enabled": true,
     "priority": 2
-  },
-  {
-    "id": "downtownlansing",
-    "merchantName": "Downtown Lansing Inc.",
-    "city": "Lansing",
-    "state": "MI",
-    "type": "aggregator",
-    "category": "Entertainment",
-    "url": "https://www.downtownlansing.org/events",
-    "fetchMode": "renderedHtml",
-    "selectors": {
-      "item": ".event, .event-card, .event-item",
-      "title": "h3, h2, .event-title",
-      "desc": ".description, .event-details, p",
-      "date": ".date, .event-date, time"
-    },
-    "keywords": ["deal", "special", "discount", "off", "promotion"],
-    "enabled": true,
-    "priority": 1
   },
   {
     "id": "meridianmall",
@@ -184,4 +639,3 @@
     "priority": 2
   }
 ]
-
